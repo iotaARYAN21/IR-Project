@@ -1,2 +1,4 @@
 *.zip
 data/nq/corpus.jsonl
+.venv
+__pycache__
