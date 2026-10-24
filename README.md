@@ -95,8 +95,3 @@ python3 -m src.evaluation.evaluate_bm25 --k 20
 The evaluator expects the index to have already been built and uses the same
 Elasticsearch connection settings as the indexer.
 
-## Run the metric tests
-
-```bash
-python3 -m unittest discover -s tests -v
-```
