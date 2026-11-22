@@ -18,9 +18,8 @@ results using standard ranking metrics.
 - Added a BM25 + CrossEncoder reranker evaluation (see "BM25 + reranker"
   below).
 - Added semantic (dense) retrieval: the corpus is encoded with
-  `multi-qa-MiniLM-L6-cos-v1` (on Colab or a Slurm cluster, see `cluster/`),
-  and `src/search/dense.py` searches the vectors exactly. See "Document
-  embeddings" and "Dense (semantic) retrieval".
+  `multi-qa-MiniLM-L6-cos-v1`, and `src/search/dense.py` searches the vectors
+  exactly. See "Document embeddings" and "Dense (semantic) retrieval".
 - Added hybrid retrieval that fuses BM25 and dense results with reciprocal
   rank fusion (see "Hybrid retrieval").
 - Added a command-line search tool for BM25, dense and hybrid retrieval, with
@@ -221,8 +220,8 @@ Elasticsearch connection settings as the indexer.
 
 `src/search/dense.py` searches precomputed document vectors exhaustively, so
 the result is exact. The vectors are made by `src/indexing/encode_corpus.py`
-with `multi-qa-MiniLM-L6-cos-v1` (a GPU is much faster for this step, see
-`cluster/`). Check the vectors, then evaluate:
+with `multi-qa-MiniLM-L6-cos-v1` (a GPU is much faster for this step). Check
+the vectors, then evaluate:
 
 ```bash
 python3 -m src.indexing.encode_corpus --verify
