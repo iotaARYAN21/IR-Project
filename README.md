@@ -12,32 +12,84 @@ results using standard ranking metrics.
 - Added BM25 search over document titles and text, with a small boost for
   titles.
 - Added evaluation using NDCG@k, MRR@k and Recall@k against the NQ test
-  qrels, plus per-query latency timing.
+  qrels, with per-query latency timing. Results and per-query scores are saved
+  to JSON, and `src.evaluation.compare` runs a paired bootstrap significance
+  test between two runs.
 - Added a BM25 + CrossEncoder reranker evaluation (see "BM25 + reranker"
   below).
-- Added unit tests for the ranking metric and latency calculations.
+- Added semantic (dense) retrieval: the corpus is encoded with
+  `multi-qa-MiniLM-L6-cos-v1` (on Colab or a Slurm cluster, see `cluster/`),
+  and `src/search/dense.py` searches the vectors exactly. See "Document
+  embeddings" and "Dense (semantic) retrieval".
+- Added hybrid retrieval that fuses BM25 and dense results with reciprocal
+  rank fusion (see "Hybrid retrieval").
+- Added a command-line search tool for BM25, dense and hybrid retrieval, with
+  optional reranking and per-stage timings (see "Live search").
+- Added unit tests for the metrics, latency, fusion, dense search, encoder and
+  search pipeline code.
 - Added setup and run instructions below.
 
-The NQ query and qrels files are included. The document corpus is not
-included, so it needs to be downloaded separately before building the index.
+The code for all of the above is written and tested, but not every full
+evaluation has been run yet. The results table below is filled in as the runs
+finish.
 
-## What we plan to do
+The NQ query and qrels files are included. The document corpus and the
+embeddings are not, so they need to be downloaded separately (see "Data and
+setup" and "Document embeddings").
 
-The remaining work is planned in stages:
+## Results
 
-- Run the full BM25 vs. BM25 plus reranker comparison and record the results.
-- Add semantic search, then evaluate BM25 plus semantic search and a
-  combination of BM25, semantic search, and reranking.
-- Implement and compare a retrieval method that does not use BM25, together
-  with semantic search.
-- Explore query expansion and proximity search, autocomplete, spelling
-  correction ("Did you mean?"), and smart snippets.
-- Improve and document preprocessing and the index as needed, including
-  tokenization, lowercasing, stemming or lemmatization, stopword handling,
-  and term positions or frequencies.
+Full test set (3,452 queries), cutoff k = 10. *To be filled in from the saved
+`results/*.json` files.*
 
-The semantic model and non-BM25 retrieval method have not been chosen yet. The list above describes future work; it is not all
-implemented in the current code.
+| System | NDCG@10 | MRR@10 | Recall@10 | Median latency |
+| --- | --- | --- | --- | --- |
+| BM25 | | | | |
+| Dense | | | | |
+| Hybrid (BM25 + dense, RRF) | | | | |
+| BM25 + reranker | | | | |
+| Hybrid + reranker | | | | |
+
+## What remains to be done
+
+Roughly in the order we plan to do it:
+
+1. **Run the full evaluations and record the results.** BM25, dense, hybrid
+   and BM25 + reranker on the whole test set (the reranker takes hours on CPU),
+   then run `src.evaluation.compare` on each pair and fill in the table above.
+2. **Hybrid + reranker.** Rerank the fused run file. The evaluator for this
+   does not exist yet. It should read the saved run file, and could run on a GPU
+   to save time. Cache the CrossEncoder scores, because the candidate lists
+   overlap heavily.
+3. **Tune the hybrid.** Try different fusion weights and RRF constants on a
+   held-out part of the queries, not the test queries.
+4. **A retrieval method that does not use BM25**, combined with semantic
+   search. The method is not chosen yet. The simplest candidate is another
+   Elasticsearch similarity (for example language-model Dirichlet scoring),
+   which needs a second index.
+5. **Web UI.** A browser interface on top of the same search code the
+   command-line tool uses:
+   - a search box with a method selector (BM25, dense, hybrid) and a reranking
+     switch;
+   - result cards with the title, a snippet and the score, and per-stage timings
+     for each search;
+   - side-by-side results from two methods for the same query, to show how they
+     differ;
+   - the search features below (highlighting, suggestions, "Did you mean?")
+     added to it as they are built.
+   It needs a small server that loads the engine once at startup. The dense
+   vectors take 4 GB of RAM, so the memory use on the demo machine matters.
+6. **Search features:** query expansion and proximity search, autocomplete,
+   spelling correction ("Did you mean?"), and smart snippets with the matching
+   words highlighted. The index already stores term offsets for highlighting.
+7. **Preprocessing and the index:** improve and document tokenization,
+   lowercasing, stemming or lemmatization, stopword handling, and term
+   positions or frequencies. This needs a rebuilt index and about 10 GB of
+   disk, and `src/indexing/preprocess.py` is still empty.
+8. **Optional: Elasticsearch vector index** (kNN) for realistic dense latency,
+   and so that dense search runs inside the same server as BM25.
+9. **Analysis and report:** error analysis with example queries, the effect of
+   sparse relevance judgments, and the final comparison and latency discussion.
 
 ## Data and setup
 
