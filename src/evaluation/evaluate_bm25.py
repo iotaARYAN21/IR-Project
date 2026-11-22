@@ -9,10 +9,11 @@ from collections import defaultdict
 from pathlib import Path
 
 from src.indexing.config import DATASET_DIR, INDEX_NAME, create_es_client
-from src.search.bm25 import search
+from src.search.bm25 import search_with_scores
 from src.evaluation.latency import format_latency, summarize_latencies
 from src.evaluation.metrics import evaluate_rankings, per_query_scores
 from src.evaluation.results import default_output_path, save_results
+from src.evaluation.runs import default_run_path, save_run
 
 QUERIES_FILE = DATASET_DIR / "queries.jsonl"
 QRELS_FILE = DATASET_DIR / "qrels" / "test.tsv"
@@ -111,6 +112,13 @@ def main() -> None:
         help="Leading queries excluded from latency statistics (default: 5).",
     )
     parser.add_argument(
+        "--run-depth",
+        type=int,
+        default=100,
+        help="Documents retrieved and saved per query in the run file used for "
+        "hybrid fusion and reranking (default: 100). At least --k are fetched.",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=None,
@@ -120,6 +128,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.k < 1:
         parser.error("--k must be at least 1")
+    if args.run_depth < 1:
+        parser.error("--run-depth must be at least 1")
     if args.warmup < 0:
         parser.error("--warmup must not be negative")
 
@@ -132,16 +142,18 @@ def main() -> None:
             f"{QUERIES_FILE}: {', '.join(missing_queries[:5])}"
         )
 
+    depth = max(args.k, args.run_depth)
     client = create_es_client()
+    run: dict[str, list[tuple[str, float]]] = {}
     rankings: dict[str, list[str]] = {}
     latencies: list[float] = []
     try:
         for query_id in qrels:
             start = time.perf_counter()
-            rankings[query_id] = search(
-                client, queries[query_id], args.k, args.index
-            )
+            hits = search_with_scores(client, queries[query_id], depth, args.index)
             latencies.append(time.perf_counter() - start)
+            run[query_id] = hits
+            rankings[query_id] = [doc_id for doc_id, _ in hits]
     finally:
         client.close()
 
@@ -151,15 +163,26 @@ def main() -> None:
     print(f"MRR@{args.k}:  {scores[f'mrr@{args.k}']:.4f}")
     print(f"Recall@{args.k}: {scores[f'recall@{args.k}']:.4f}")
     latency = summarize_latencies(latencies, args.warmup)
-    print(format_latency("BM25 latency", latency))
+    print(format_latency(f"BM25 latency (top {depth} fetched)", latency))
 
+    save_run(
+        default_run_path("bm25"),
+        "bm25",
+        run,
+        depth=depth,
+        latency={"total": latency},
+    )
     save_results(
         args.output or default_output_path("bm25", args.k),
         {
             "system": "bm25",
             "k": args.k,
             "num_queries": len(qrels),
-            "args": {"index": args.index, "warmup": args.warmup},
+            "args": {
+                "index": args.index,
+                "warmup": args.warmup,
+                "run_depth": depth,
+            },
             "scores": scores,
             "latency": {"bm25": latency},
             "per_query": per_query_scores(rankings, qrels, args.k),

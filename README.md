@@ -143,6 +143,39 @@ It needs about 4 GB of free RAM, because all vectors are held as float32.
 Elasticsearch is not needed. Results are saved to `results/dense_k10.json`
 and can be compared with the other systems using `src.evaluation.compare`.
 
+## Hybrid retrieval (BM25 + dense)
+
+The BM25 and dense evaluators also save a **run file**: the top documents and
+scores they returned for every query (`results/runs/bm25.json`,
+`results/runs/dense.json`). `--run-depth` (default 100) sets how many documents
+are kept per query, and each evaluator fetches at least that many, so its
+latency is measured at that depth. Fusion and later reranking read these files,
+so each slow system only has to run once.
+
+```bash
+python3 -m src.evaluation.evaluate_bm25        # needs Elasticsearch running
+python3 -m src.evaluation.evaluate_dense       # needs the document vectors
+python3 -m src.evaluation.evaluate_hybrid      # needs neither, takes seconds
+```
+
+`evaluate_hybrid` merges the two ranked lists with **reciprocal rank fusion**
+(RRF): a document at rank r in a list gets `1 / (rrf_k + r)` from it, and the
+scores from both lists are added. Only ranks are used, so the very different
+BM25 and cosine score scales need no normalising. Options:
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--k` | `10` | Rank cutoff for NDCG, MRR and Recall. |
+| `--candidates` | `100` | Top documents taken from each run before fusing. |
+| `--rrf-k` | `60` | RRF constant. Larger values flatten the difference between ranks. |
+| `--bm25-weight`, `--dense-weight` | `1.0` | Weight of each list. |
+| `--run-depth` | `100` | Fused documents saved to `results/runs/hybrid.json`. |
+
+The fused run is saved so it can be reranked later. The hybrid latency is
+estimated as BM25 + dense + fusion (mean latencies, systems run one after the
+other), because the two searches are measured in their own runs. If dense was
+run with `--batch-queries`, no latency is stored and no estimate is printed.
+
 ## Saved results and significance testing
 
 Each evaluator saves its results to a JSON file: `results/bm25_k10.json` for

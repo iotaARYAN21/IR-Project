@@ -10,6 +10,7 @@ from src.evaluation.evaluate_bm25 import QUERIES_FILE, load_qrels, load_queries
 from src.evaluation.latency import format_latency, summarize_latencies
 from src.evaluation.metrics import evaluate_rankings, per_query_scores
 from src.evaluation.results import default_output_path, save_results
+from src.evaluation.runs import default_run_path, save_run
 from src.indexing.encode_corpus import DEFAULT_MODEL, EMBEDDINGS_ROOT
 from src.search.dense import DenseIndex, encode_queries, load_query_encoder
 
@@ -50,6 +51,13 @@ def main() -> None:
         help="Leading queries excluded from latency statistics (default: 5).",
     )
     parser.add_argument(
+        "--run-depth",
+        type=int,
+        default=100,
+        help="Documents retrieved and saved per query in the run file used for "
+        "hybrid fusion and reranking (default: 100). At least --k are fetched.",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=None,
@@ -60,6 +68,8 @@ def main() -> None:
         parser.error("--k must be at least 1")
     if args.warmup < 0:
         parser.error("--warmup must not be negative")
+    if args.run_depth < 1:
+        parser.error("--run-depth must be at least 1")
     if args.max_queries is not None and args.max_queries < 1:
         parser.error("--max-queries must be at least 1")
 
@@ -82,6 +92,8 @@ def main() -> None:
     print(f"Loading query encoder: {args.model}")
     encoder = load_query_encoder(args.model)
 
+    depth = max(args.k, args.run_depth)
+    run: dict[str, list[tuple[str, float]]] = {}
     rankings: dict[str, list[str]] = {}
     encode_times: list[float] = []
     search_times: list[float] = []
@@ -91,16 +103,18 @@ def main() -> None:
     if args.batch_queries:
         texts = [queries[query_id] for query_id in query_ids]
         vectors = encode_queries(encoder, texts)
-        hits = index.search_vectors(vectors, args.k)
+        hits = index.search_vectors(vectors, depth)
         for query_id, query_hits in zip(query_ids, hits):
+            run[query_id] = query_hits
             rankings[query_id] = [doc_id for doc_id, _ in query_hits]
     else:
         for query_id in tqdm(query_ids, desc="Searching", unit="queries"):
             begin = time.perf_counter()
             vector = encode_queries(encoder, [queries[query_id]])
             encoded = time.perf_counter()
-            hits = index.search_vectors(vector, args.k)[0]
+            hits = index.search_vectors(vector, depth)[0]
             end = time.perf_counter()
+            run[query_id] = hits
             rankings[query_id] = [doc_id for doc_id, _ in hits]
             encode_times.append(encoded - begin)
             search_times.append(end - encoded)
@@ -124,6 +138,13 @@ def main() -> None:
             latency[key] = summarize_latencies(values, args.warmup)
             print(format_latency(label, latency[key]))
 
+    save_run(
+        default_run_path("dense", args.max_queries),
+        "dense",
+        run,
+        depth=depth,
+        latency=latency,
+    )
     save_results(
         args.output or default_output_path("dense", args.k, args.max_queries),
         {
@@ -136,6 +157,7 @@ def main() -> None:
                 "max_queries": args.max_queries,
                 "batch_queries": args.batch_queries,
                 "warmup": args.warmup,
+                "run_depth": depth,
             },
             "scores": scores,
             "latency": latency,

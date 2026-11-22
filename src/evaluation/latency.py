@@ -50,3 +50,15 @@ def format_latency(label: str, stats: dict[str, float]) -> str:
         f"p99 {stats['p99_ms']:.1f} ms "
         f"({int(stats['count'])} queries, {stats['qps']:.1f} queries/s)"
     )
+
+
+def estimate_total_latency(bm25_run: dict, dense_run: dict, fusion: dict):
+    """Mean latency if BM25, dense search and fusion run one after the other."""
+    parts = {}
+    for name, run in (("bm25", bm25_run), ("dense", dense_run)):
+        total = run.get("latency", {}).get("total")
+        if not total:
+            return None
+        parts[name] = total["mean_ms"]
+    parts["fusion"] = fusion["mean_ms"]
+    return {"mean_ms": sum(parts.values()), "components_mean_ms": parts}
