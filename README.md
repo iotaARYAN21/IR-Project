@@ -125,6 +125,24 @@ when you report it.
 The evaluator expects the index to have already been built and uses the same
 Elasticsearch connection settings as the indexer.
 
+## Dense (semantic) retrieval
+
+`src/search/dense.py` searches precomputed document vectors exhaustively, so
+the result is exact. The vectors are made by `src/indexing/encode_corpus.py`
+with `multi-qa-MiniLM-L6-cos-v1` (a GPU is much faster for this step, see
+`cluster/`). Check the vectors, then evaluate:
+
+```bash
+python3 -m src.indexing.encode_corpus --verify
+python3 -m src.evaluation.evaluate_dense --max-queries 50     # quick check
+python3 -m src.evaluation.evaluate_dense                      # full run, measures latency
+python3 -m src.evaluation.evaluate_dense --batch-queries      # much faster, no latency
+```
+
+It needs about 4 GB of free RAM, because all vectors are held as float32.
+Elasticsearch is not needed. Results are saved to `results/dense_k10.json`
+and can be compared with the other systems using `src.evaluation.compare`.
+
 ## Saved results and significance testing
 
 Each evaluator saves its results to a JSON file: `results/bm25_k10.json` for
