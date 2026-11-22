@@ -1,12 +1,16 @@
 """Evaluate BM25 retrieval followed by CrossEncoder reranking on NQ."""
 
 import argparse
+import time
+from pathlib import Path
 
 from sentence_transformers import CrossEncoder
 from tqdm import tqdm
 
 from src.evaluation.evaluate_bm25 import QUERIES_FILE, load_qrels, load_queries
-from src.evaluation.metrics import evaluate_rankings
+from src.evaluation.latency import format_latency, summarize_latencies
+from src.evaluation.metrics import evaluate_rankings, per_query_scores
+from src.evaluation.results import default_output_path, save_results
 from src.indexing.config import INDEX_NAME, create_es_client
 
 RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
@@ -79,9 +83,24 @@ def main() -> None:
         default=None,
         help="Evaluate only the first N qrel queries (useful for quick checks).",
     )
+    parser.add_argument(
+        "--warmup",
+        type=int,
+        default=5,
+        help="Leading queries excluded from latency statistics (default: 5).",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Where to save the results JSON "
+        "(default: results/bm25_reranker_k<k>[_n<N>].json).",
+    )
     args = parser.parse_args()
     if args.k < 1:
         parser.error("--k must be at least 1")
+    if args.warmup < 0:
+        parser.error("--warmup must not be negative")
     if args.bm25_candidates < args.k:
         parser.error("--bm25-candidates must be at least --k")
     if args.max_queries is not None and args.max_queries < 1:
@@ -103,11 +122,20 @@ def main() -> None:
 
     client = create_es_client()
     rankings: dict[str, list[str]] = {}
+    bm25_latencies: list[float] = []
+    rerank_latencies: list[float] = []
+    total_latencies: list[float] = []
     try:
         for query_id in tqdm(qrels, desc="Retrieving and reranking", unit="queries"):
             query_text = queries[query_id]
+            start = time.perf_counter()
             hits = search_bm25(client, args.index, query_text, args.bm25_candidates)
+            bm25_done = time.perf_counter()
             reranked = rerank_hits(query_text, hits, reranker)
+            end = time.perf_counter()
+            bm25_latencies.append(bm25_done - start)
+            rerank_latencies.append(end - bm25_done)
+            total_latencies.append(end - start)
             rankings[query_id] = [hit["_id"] for hit in reranked[: args.k]]
     finally:
         client.close()
@@ -119,6 +147,35 @@ def main() -> None:
     )
     print(f"NDCG@{args.k}: {scores[f'ndcg@{args.k}']:.4f}")
     print(f"MRR@{args.k}:  {scores[f'mrr@{args.k}']:.4f}")
+    print(f"Recall@{args.k}: {scores[f'recall@{args.k}']:.4f}")
+    latency = {}
+    for key, label, values in (
+        ("bm25", "BM25 stage latency", bm25_latencies),
+        ("rerank", "Rerank stage latency", rerank_latencies),
+        ("total", "Total latency", total_latencies),
+    ):
+        latency[key] = summarize_latencies(values, args.warmup)
+        print(format_latency(label, latency[key]))
+
+    save_results(
+        args.output
+        or default_output_path("bm25_reranker", args.k, args.max_queries),
+        {
+            "system": "bm25_reranker",
+            "k": args.k,
+            "num_queries": len(qrels),
+            "args": {
+                "index": args.index,
+                "model": args.model,
+                "bm25_candidates": args.bm25_candidates,
+                "max_queries": args.max_queries,
+                "warmup": args.warmup,
+            },
+            "scores": scores,
+            "latency": latency,
+            "per_query": per_query_scores(rankings, qrels, args.k),
+        },
+    )
 
 
 if __name__ == "__main__":
