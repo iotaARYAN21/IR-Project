@@ -11,10 +11,11 @@ results using standard ranking metrics.
   index uses Elasticsearch's standard analyzer and BM25 similarity.
 - Added BM25 search over document titles and text, with a small boost for
   titles.
-- Added evaluation using NDCG@k and MRR@k against the NQ test qrels.
+- Added evaluation using NDCG@k, MRR@k and Recall@k against the NQ test
+  qrels, plus per-query latency timing.
 - Added a BM25 + CrossEncoder reranker evaluation (see "BM25 + reranker"
   below).
-- Added unit tests for the ranking metric calculations.
+- Added unit tests for the ranking metric and latency calculations.
 - Added setup and run instructions below.
 
 The NQ query and qrels files are included. The document corpus is not
@@ -86,12 +87,40 @@ Run the baseline evaluation on the test qrels:
 python3 -m src.evaluation.evaluate_bm25
 ```
 
-The default output reports NDCG@10 and MRR@10. Choose a different rank cutoff
-with `--k`, for example:
+The default output reports NDCG@10, MRR@10 and Recall@10, followed by a
+latency summary. Choose a different rank cutoff with `--k`. It applies to all
+three metrics, for example:
 
 ```bash
 python3 -m src.evaluation.evaluate_bm25 --k 20
 ```
+
+### Metrics
+
+- **NDCG@k** rewards relevant documents that appear near the top.
+- **MRR@k** is the reciprocal rank of the first relevant document in the top
+  k, or 0 if there is none.
+- **Recall@k** is the fraction of a query's relevant documents found in the
+  top k. Order inside the top k does not matter. Use `--k 100` to see how many
+  relevant documents appear in the top 100, which is also the ceiling for a
+  reranker over 100 BM25 candidates. Note that `--k` changes the cutoff of
+  all three metrics at once.
+
+### Latency
+
+The evaluator times each query's search call and prints a summary line:
+
+```
+BM25 latency: median <ms> ms, mean <ms> ms, p95 <ms> ms, p99 <ms> ms (<n> queries, <q> queries/s)
+```
+
+The median is the typical query. The mean is pulled up by slow outliers. The
+p95 and p99 values show the slow tail, and queries/s is the number of queries
+divided by the time they took when run one after another. The first queries
+are slow because of cold caches, so the first 5 are left out of the statistics
+by default. Change this with `--warmup N`. Time spent connecting or loading
+models is not counted. Latency depends on your hardware, so note the machine
+when you report it.
 
 The evaluator expects the index to have already been built and uses the same
 Elasticsearch connection settings as the indexer.
@@ -115,8 +144,9 @@ The tests do not need Elasticsearch or the corpus.
 ## BM25 + reranker
 
 `src/evaluation/evaluate_bm25_reranker.py` adds a second ranking stage on top
-of BM25 and evaluates it with the same NDCG@k and MRR@k metrics, so its output
-can be compared directly with the BM25 baseline.
+of BM25 and evaluates it with the same NDCG@k, MRR@k and Recall@k metrics, so
+its output can be compared directly with the BM25 baseline. It also reports
+latency separately for the BM25 stage, the rerank stage and the total.
 
 ### Required libraries
 
@@ -158,11 +188,14 @@ The reranker uses a two-stage retrieve-then-rerank pipeline:
    first. The BM25 score is not used after this point. The top `k` document
    IDs become the final ranking.
 4. **Evaluation.** The rankings are scored against `data/nq/qrels/test.tsv`
-   with NDCG@k and MRR@k, over the same queries as the BM25 evaluator.
+   with NDCG@k, MRR@k and Recall@k, over the same queries as the BM25
+   evaluator.
 
 The reranker can only reorder what BM25 returns. A relevant document that is
 not among the BM25 candidates cannot be recovered, so `--bm25-candidates`
-sets the upper limit on recall. The CrossEncoder processes every
+sets the upper limit on recall. Reranking only reorders the candidates, so
+Recall@`--bm25-candidates` is the same for BM25 and BM25 + reranker. The
+improvement shows up in NDCG and MRR. The CrossEncoder processes every
 query-document pair separately, so it is much slower than BM25. Running time
 grows with (number of queries × number of candidates).
 
@@ -210,11 +243,12 @@ Available options:
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `--k` | `10` | Rank cutoff for NDCG and MRR. |
+| `--k` | `10` | Rank cutoff for NDCG, MRR and Recall. |
 | `--bm25-candidates` | `100` | Number of BM25 documents to rerank per query. Must be at least `--k`. |
 | `--index` | `nq_documents` | Elasticsearch index to search. |
 | `--model` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | CrossEncoder model to use for reranking. |
 | `--max-queries` | all | Evaluate only the first N test queries. |
+| `--warmup` | `5` | Leading queries left out of the latency statistics. |
 
 For example, to rerank 50 candidates and report metrics at 20:
 
@@ -235,5 +269,12 @@ The output looks like this:
 Evaluated BM25 + Reranker on 3452 queries (top 10, 100 BM25 candidates)
 NDCG@10: <score>
 MRR@10:  <score>
+Recall@10: <score>
+BM25 stage latency: median <ms> ms, mean <ms> ms, p95 <ms> ms, p99 <ms> ms (...)
+Rerank stage latency: median <ms> ms, mean <ms> ms, p95 <ms> ms, p99 <ms> ms (...)
+Total latency: median <ms> ms, mean <ms> ms, p95 <ms> ms, p99 <ms> ms (...)
 ```
+
+The rerank stage dominates the total time, because the CrossEncoder scores
+every candidate. To report recall over all candidates, use `--k 100`.
 
