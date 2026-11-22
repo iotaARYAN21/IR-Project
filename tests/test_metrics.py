@@ -5,6 +5,7 @@ from src.evaluation.metrics import (
     evaluate_rankings,
     mrr_at_k,
     ndcg_at_k,
+    per_query_scores,
     recall_at_k,
 )
 
@@ -57,6 +58,20 @@ class RankingMetricsTests(unittest.TestCase):
     def test_recall_ignores_zero_relevance_and_handles_no_relevant_docs(self):
         self.assertEqual(recall_at_k(["doc-1"], {"doc-1": 0.0}), 0.0)
         self.assertEqual(recall_at_k(["doc-1"], {"doc-1": 1.0, "doc-2": 0.0}), 1.0)
+
+    def test_per_query_scores_gives_one_entry_per_qrel_query(self):
+        scores = per_query_scores(
+            {"q1": ["relevant"]},
+            {"q1": {"relevant": 1.0}, "q2": {"other": 1.0}},
+            k=10,
+        )
+        self.assertEqual(
+            scores,
+            {
+                "q1": {"ndcg": 1.0, "mrr": 1.0, "recall": 1.0},
+                "q2": {"ndcg": 0.0, "mrr": 0.0, "recall": 0.0},
+            },
+        )
 
     def test_evaluate_rankings_reports_recall_at_the_same_k(self):
         rankings = {"q1": ["a", "b", "relevant"]}

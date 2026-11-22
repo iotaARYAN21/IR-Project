@@ -11,7 +11,8 @@ from pathlib import Path
 from src.indexing.config import DATASET_DIR, INDEX_NAME, create_es_client
 from src.search.bm25 import search
 from src.evaluation.latency import format_latency, summarize_latencies
-from src.evaluation.metrics import evaluate_rankings
+from src.evaluation.metrics import evaluate_rankings, per_query_scores
+from src.evaluation.results import default_output_path, save_results
 
 QUERIES_FILE = DATASET_DIR / "queries.jsonl"
 QRELS_FILE = DATASET_DIR / "qrels" / "test.tsv"
@@ -109,6 +110,13 @@ def main() -> None:
         default=5,
         help="Leading queries excluded from latency statistics (default: 5).",
     )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Where to save the results JSON "
+        "(default: results/bm25_k<k>.json).",
+    )
     args = parser.parse_args()
     if args.k < 1:
         parser.error("--k must be at least 1")
@@ -142,10 +150,20 @@ def main() -> None:
     print(f"NDCG@{args.k}: {scores[f'ndcg@{args.k}']:.4f}")
     print(f"MRR@{args.k}:  {scores[f'mrr@{args.k}']:.4f}")
     print(f"Recall@{args.k}: {scores[f'recall@{args.k}']:.4f}")
-    print(
-        format_latency(
-            "BM25 latency", summarize_latencies(latencies, args.warmup)
-        )
+    latency = summarize_latencies(latencies, args.warmup)
+    print(format_latency("BM25 latency", latency))
+
+    save_results(
+        args.output or default_output_path("bm25", args.k),
+        {
+            "system": "bm25",
+            "k": args.k,
+            "num_queries": len(qrels),
+            "args": {"index": args.index, "warmup": args.warmup},
+            "scores": scores,
+            "latency": {"bm25": latency},
+            "per_query": per_query_scores(rankings, qrels, args.k),
+        },
     )
 
 

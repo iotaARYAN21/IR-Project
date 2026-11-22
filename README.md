@@ -125,6 +125,28 @@ when you report it.
 The evaluator expects the index to have already been built and uses the same
 Elasticsearch connection settings as the indexer.
 
+## Saved results and significance testing
+
+Each evaluator saves its results to a JSON file: `results/bm25_k10.json` for
+the baseline and `results/bm25_reranker_k10.json` for the reranker (the `k`
+in the name follows `--k`). A run limited with `--max-queries N` is saved
+separately, as `..._n<N>.json`, so a quick check never overwrites a full run.
+Use `--output PATH` to choose another file. Each file holds the settings, the
+mean scores, the latency summary and the NDCG, MRR and recall of every query.
+
+Compare two saved runs on the queries they share, using a paired bootstrap
+over queries:
+
+```bash
+python3 -m src.evaluation.compare results/bm25_k10.json results/bm25_reranker_k10.json
+```
+
+For each metric it prints both means, the difference (B minus A) with a 95%
+confidence interval, a two-sided p-value, and on how many queries B did
+better, worse or the same. If the confidence interval excludes 0, the
+difference is unlikely to come from chance. Both runs must use the same
+`--k`. Options are `--resamples` (default 10000) and `--seed`.
+
 ## Run the unit tests
 
 From the project root, run all unit tests with:
