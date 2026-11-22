@@ -96,6 +96,22 @@ python3 -m src.evaluation.evaluate_bm25 --k 20
 The evaluator expects the index to have already been built and uses the same
 Elasticsearch connection settings as the indexer.
 
+## Run the unit tests
+
+From the project root, run all unit tests with:
+
+```bash
+python3 -m unittest discover -s tests
+```
+
+Add `-v` to list each test. To run a single file:
+
+```bash
+python3 -m unittest tests.test_metrics
+```
+
+The tests do not need Elasticsearch or the corpus.
+
 ## BM25 + reranker
 
 `src/evaluation/evaluate_bm25_reranker.py` adds a second ranking stage on top
