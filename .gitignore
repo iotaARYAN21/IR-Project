@@ -1,5 +1,6 @@
 *.zip
 data/nq/corpus.jsonl
+data/nq/embeddings/
 .venv
 __pycache__
 scratch/

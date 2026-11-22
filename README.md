@@ -43,7 +43,8 @@ implemented in the current code.
 
 The repository includes `data/nq/queries.jsonl` and
 `data/nq/qrels/test.tsv`. Place the BEIR-format NQ `corpus.jsonl` file at
-`data/nq/corpus.jsonl` before building the index.
+`data/nq/corpus.jsonl` before building the index. Dense and hybrid search also
+need the precomputed document embeddings, see "Document embeddings" below.
 
 Use Python 3.10 or newer. Install the project dependencies:
 
@@ -66,6 +67,45 @@ export ELASTICSEARCH_CA_CERT="/path/to/http_ca.crt"
 `ELASTICSEARCH_CA_CERT` is optional when the server certificate is already
 trusted by your system. The index name defaults to `nq_documents`; override it
 with `ELASTICSEARCH_INDEX` if needed.
+
+## Document embeddings
+
+Dense (semantic) search and the hybrid search need a vector for every passage
+in the corpus. They are made with `sentence-transformers/multi-qa-MiniLM-L6-cos-v1`
+(384 dimensions, stored as float16, about 2 GB for the 2,681,468 passages). The
+BM25 evaluation and the BM25 + reranker evaluation do not need them.
+
+### Get the embeddings
+
+Download the embeddings from: **<https://drive.google.com/drive/folders/1bI5l_9bk_raA9Huak051WUnMeno9CXkw?usp=sharing>**
+
+Download it (Drive may split a large folder into several zip files) and unzip all parts into `data/nq/embeddings/`, so that this layout results:
+
+```
+data/nq/embeddings/multi-qa-MiniLM-L6-cos-v1/
+    meta.json
+    vectors_00000.npy ... vectors_00053.npy    (54 files)
+    ids_00000.json    ... ids_00053.json       (54 files)
+```
+
+`meta.json` and the 54 `vectors_*.npy` and 54 `ids_*.json` files must sit
+directly in that folder, not in a subfolder. The folder is ignored by git.
+`data/nq/corpus.jsonl` must also be in place, because the check below compares
+the embeddings against it.
+
+### Check them
+
+```bash
+python3 -m src.indexing.encode_corpus --verify
+```
+
+This checks every chunk against the corpus and should print
+`OK: all chunks present, 2681468 documents`. If it lists missing or wrong
+chunks, download them again. The search code refuses to load embeddings that
+have not passed this check.
+
+Loading the embeddings takes about 4 GB of RAM, because the vectors are held
+as float32.
 
 ## Build and evaluate
 
@@ -175,6 +215,27 @@ The fused run is saved so it can be reranked later. The hybrid latency is
 estimated as BM25 + dense + fusion (mean latencies, systems run one after the
 other), because the two searches are measured in their own runs. If dense was
 run with `--batch-queries`, no latency is stored and no estimate is printed.
+
+## Live search (command line)
+
+`src/search/cli.py` searches the passages interactively with BM25, dense or
+hybrid retrieval, with optional CrossEncoder reranking. It needs Elasticsearch
+running (it supplies the passage text) and the same connection settings as the
+evaluators. Dense and hybrid search also need the document vectors.
+
+```bash
+python3 -m src.search.cli                                   # interactive
+python3 -m src.search.cli --method hybrid --query "who wrote hamlet"
+python3 -m src.search.cli --method bm25 --rerank --candidates 30 --k 5 --query "..."
+```
+
+In interactive mode, type a query, or a command: `:method bm25|dense|hybrid`,
+`:rerank on|off`, `:k N`, `:candidates N`, `:settings`, `:help`, `:quit`. Each
+answer lists the results with a short snippet and the time spent in every
+stage. Components load the first time they are used: the dense vectors take
+about 4 GB of RAM and some seconds to load, and the reranker model is
+downloaded on first use. Reranking 30 candidates on a CPU takes roughly half a
+second, and 100 candidates close to two seconds.
 
 ## Saved results and significance testing
 
