@@ -119,6 +119,7 @@ def main() -> None:
     )
     print(f"NDCG@{args.k}: {scores[f'ndcg@{args.k}']:.4f}")
     print(f"MRR@{args.k}:  {scores[f'mrr@{args.k}']:.4f}")
+    print(f"Recall@{args.k}: {scores[f'recall@{args.k}']:.4f}")
 
 
 if __name__ == "__main__":

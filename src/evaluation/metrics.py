@@ -40,27 +40,46 @@ def mrr_at_k(
     return 0.0
 
 
+def recall_at_k(
+    ranked_doc_ids: Sequence[str],
+    relevance_by_doc: Mapping[str, float],
+    k: int = 10,
+) -> float:
+    """Fraction of the relevant documents that appear in the top k."""
+    _validate_k(k)
+    relevant = {
+        doc_id for doc_id, relevance in relevance_by_doc.items() if relevance > 0
+    }
+    if not relevant:
+        return 0.0
+    retrieved = set(ranked_doc_ids[:k])
+    return len(relevant & retrieved) / len(relevant)
+
+
 def evaluate_rankings(
     rankings: Mapping[str, Sequence[str]],
     qrels: Mapping[str, Mapping[str, float]],
     k: int = 10,
 ) -> dict[str, float]:
-    """Return mean NDCG@k and MRR@k over the query IDs in qrels."""
+    """Return mean NDCG@k, MRR@k and Recall@k over the query IDs in qrels."""
     _validate_k(k)
     if not qrels:
         raise ValueError("qrels must contain at least one query")
 
     ndcg_total = 0.0
     mrr_total = 0.0
+    recall_total = 0.0
     for query_id, relevance_by_doc in qrels.items():
         ranked_doc_ids = rankings.get(query_id, ())
         ndcg_total += ndcg_at_k(ranked_doc_ids, relevance_by_doc, k)
         mrr_total += mrr_at_k(ranked_doc_ids, relevance_by_doc, k)
+        recall_total += recall_at_k(ranked_doc_ids, relevance_by_doc, k)
 
     query_count = len(qrels)
     return {
         f"ndcg@{k}": ndcg_total / query_count,
         f"mrr@{k}": mrr_total / query_count,
+        f"recall@{k}": recall_total / query_count,
     }
 
 
