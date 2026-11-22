@@ -4,11 +4,13 @@ import argparse
 import csv
 import json
 import math
+import time
 from collections import defaultdict
 from pathlib import Path
 
 from src.indexing.config import DATASET_DIR, INDEX_NAME, create_es_client
 from src.search.bm25 import search
+from src.evaluation.latency import format_latency, summarize_latencies
 from src.evaluation.metrics import evaluate_rankings
 
 QUERIES_FILE = DATASET_DIR / "queries.jsonl"
@@ -101,9 +103,17 @@ def main() -> None:
         default=INDEX_NAME,
         help=f"Elasticsearch index to search (default: {INDEX_NAME}).",
     )
+    parser.add_argument(
+        "--warmup",
+        type=int,
+        default=5,
+        help="Leading queries excluded from latency statistics (default: 5).",
+    )
     args = parser.parse_args()
     if args.k < 1:
         parser.error("--k must be at least 1")
+    if args.warmup < 0:
+        parser.error("--warmup must not be negative")
 
     queries = load_queries()
     qrels = load_qrels()
@@ -115,11 +125,15 @@ def main() -> None:
         )
 
     client = create_es_client()
+    rankings: dict[str, list[str]] = {}
+    latencies: list[float] = []
     try:
-        rankings = {
-            query_id: search(client, queries[query_id], args.k, args.index)
-            for query_id in qrels
-        }
+        for query_id in qrels:
+            start = time.perf_counter()
+            rankings[query_id] = search(
+                client, queries[query_id], args.k, args.index
+            )
+            latencies.append(time.perf_counter() - start)
     finally:
         client.close()
 
@@ -128,6 +142,11 @@ def main() -> None:
     print(f"NDCG@{args.k}: {scores[f'ndcg@{args.k}']:.4f}")
     print(f"MRR@{args.k}:  {scores[f'mrr@{args.k}']:.4f}")
     print(f"Recall@{args.k}: {scores[f'recall@{args.k}']:.4f}")
+    print(
+        format_latency(
+            "BM25 latency", summarize_latencies(latencies, args.warmup)
+        )
+    )
 
 
 if __name__ == "__main__":
