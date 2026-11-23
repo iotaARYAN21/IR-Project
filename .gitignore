@@ -4,3 +4,4 @@ data/nq/embeddings/
 .venv
 __pycache__
 scratch/
+results/logs/

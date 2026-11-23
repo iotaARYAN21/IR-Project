@@ -39,9 +39,10 @@ setup" and "Document embeddings").
 ## Results
 
 Full test set (3,452 queries), cutoff k = 10. *To be filled in from the saved
-`results/*.json` files.*
+`results/*.json` files. `python3 -m src.evaluation.summarize` prints this table
+from them.*
 
-| System | NDCG@10 | MRR@10 | Recall@10 | Median latency |
+| System | NDCG@10 | MRR@10 | Recall@10 | Mean latency (ms) |
 | --- | --- | --- | --- | --- |
 | BM25 | | | | |
 | Dense | | | | |
@@ -56,10 +57,10 @@ Roughly in the order we plan to do it:
 1. **Run the full evaluations and record the results.** BM25, dense, hybrid
    and BM25 + reranker on the whole test set (the reranker takes hours on CPU),
    then run `src.evaluation.compare` on each pair and fill in the table above.
-2. **Hybrid + reranker.** Rerank the fused run file. The evaluator for this
-   does not exist yet. It should read the saved run file, and could run on a GPU
-   to save time. Cache the CrossEncoder scores, because the candidate lists
-   overlap heavily.
+2. **Hybrid + reranker.** Run `src.evaluation.evaluate_rerank` on the fused
+   run file (see "Reranking a saved run"). It can run on a GPU machine to save
+   time. Caching the CrossEncoder scores, since the BM25 and hybrid candidate
+   lists overlap heavily, is not done yet.
 3. **Tune the hybrid.** Try different fusion weights and RRF constants on a
    held-out part of the queries, not the test queries.
 4. **A retrieval method that does not use BM25**, combined with semantic
@@ -267,6 +268,34 @@ estimated as BM25 + dense + fusion (mean latencies, systems run one after the
 other), because the two searches are measured in their own runs. If dense was
 run with `--batch-queries`, no latency is stored and no estimate is printed.
 
+## Reranking a saved run
+
+`src/evaluation/evaluate_rerank.py` takes any saved run file (BM25, dense or
+hybrid), rescoring its top candidates with the CrossEncoder and evaluating the
+new order. It needs neither Elasticsearch nor the document vectors, only
+`data/nq/corpus.jsonl` for the passage text, so it can also run on a GPU
+machine.
+
+```bash
+python3 -m src.evaluation.evaluate_rerank --run results/runs/hybrid.json --max-queries 50   # quick check
+python3 -m src.evaluation.evaluate_rerank --run results/runs/hybrid.json                    # hybrid + reranker
+python3 -m src.evaluation.evaluate_rerank --run results/runs/bm25.json                      # BM25 + reranker
+```
+
+Options: `--candidates` (default 100, top documents to rerank, at most the run's
+depth), `--k`, `--model`, `--batch-size`, `--max-queries`, `--warmup`,
+`--output` and `--run-output`. Results are saved as `results/<run system>_rerank_k10.json`
+(for example `hybrid_rerank`), so `src.evaluation.compare` works on them.
+
+**Timing.** It measures the time the model takes to score each query's
+candidates (the rerank stage only, not reading the text) and prints the median,
+mean, p95 and p99. The device is printed and saved with the results, because
+the numbers depend heavily on it. If the run file stored a latency for its own
+search, it also prints the estimated total: the run's mean latency plus the
+mean rerank time. Fetching the passage text is not included. Measure on a
+machine with nothing else running, since other processes slow the model down
+and distort the latency.
+
 ## Live search (command line)
 
 `src/search/cli.py` searches the passages interactively with BM25, dense or
@@ -287,6 +316,28 @@ stage. Components load the first time they are used: the dense vectors take
 about 4 GB of RAM and some seconds to load, and the reranker model is
 downloaded on first use. Reranking 30 candidates on a CPU takes roughly half a
 second, and 100 candidates close to two seconds.
+
+## Run all evaluations
+
+`scripts/run_all_evaluations.sh` runs every evaluation in the right order
+(dense, BM25, hybrid, BM25 + reranker, hybrid + reranker), then the
+significance tests and the summary table. By default it first waits until
+`constraint_sensitivity.py` has finished and the machine has gone quiet, so the
+latency numbers are not distorted by other jobs.
+
+```bash
+export ELASTICSEARCH_PASSWORD="..."              # required (and ELASTICSEARCH_CA_CERT)
+bash scripts/run_all_evaluations.sh --quick      # 50-query test of the script itself
+bash scripts/run_all_evaluations.sh --manage-es  # the full run
+```
+
+Options: `--manage-es` stops Elasticsearch before the dense run and starts it
+only for the BM25 run (saves RAM; without it Elasticsearch must already be
+running for the BM25 step), `--skip-wait` does not wait, `--dry-run` only
+prints the steps. `WAIT_FOR`, `QUIET_LOAD`, `MAX_WAIT_MINUTES` and `ES_HOME`
+can be set as environment variables (see the top of the script). The output is
+also written to `results/logs/`. Expect roughly 3.5 to 6.5 hours on a CPU
+laptop, most of it the two reranker runs.
 
 ## Saved results and significance testing
 

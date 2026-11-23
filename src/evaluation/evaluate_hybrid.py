@@ -161,7 +161,10 @@ def main() -> None:
         "hybrid",
         fused_run,
         depth=args.run_depth,
-        latency={"fusion": fusion},
+        latency={
+            "fusion": fusion,
+            **({"total": {"mean_ms": estimate["mean_ms"]}} if estimate else {}),
+        },
     )
     save_results(
         args.output or default_output_path("hybrid", args.k),
