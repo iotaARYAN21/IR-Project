@@ -1,13 +1,30 @@
 const form = document.querySelector('#search-form');
 const queryInput = document.querySelector('#query');
 const methodSelect = document.querySelector('#method');
-const kSelect = document.querySelector('#k');
-const candidatesSelect = document.querySelector('#candidates');
+const kInput = document.querySelector('#k');
+const candidatesInput = document.querySelector('#candidates');
 const rerankInput = document.querySelector('#rerank');
 const compareInput = document.querySelector('#compare');
+const compareMethodField = document.querySelector('#compare-method-field');
+const compareMethodSelect = document.querySelector('#compare-method');
 const results = document.querySelector('#results');
 const status = document.querySelector('#status');
 const themeToggle = document.querySelector('#theme-toggle');
+const methods = ['bm25', 'dense', 'hybrid'];
+
+function updateCompareMethods() {
+  const previous = compareMethodSelect.value;
+  const available = methods.filter((method) => method !== methodSelect.value);
+  compareMethodSelect.replaceChildren(...available.map((method) => {
+    const option = document.createElement('option');
+    option.value = method;
+    option.textContent = method.toUpperCase();
+    return option;
+  }));
+  compareMethodSelect.value = available.includes(previous)
+    ? previous
+    : available[0];
+}
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -66,8 +83,8 @@ async function searchOne(query, method) {
     body: JSON.stringify({
       query,
       method,
-      k: Number(kSelect.value),
-      candidates: Number(candidatesSelect.value),
+      k: Number(kInput.value),
+      candidates: Number(candidatesInput.value),
       rerank: rerankInput.checked
     })
   });
@@ -90,12 +107,11 @@ form.addEventListener('submit', async (event) => {
 
   try {
     const selected = methodSelect.value;
-    const methods = compareInput.checked
-      ? [selected === 'hybrid' ? 'bm25' : selected, selected]
+    const selectedMethods = compareInput.checked
+      ? [selected, compareMethodSelect.value]
       : [selected];
 
-    const uniqueMethods = [...new Set(methods)];
-    const responses = await Promise.all(uniqueMethods.map((method) => searchOne(query, method)));
+    const responses = await Promise.all(selectedMethods.map((method) => searchOne(query, method)));
     results.style.setProperty('--columns', String(responses.length));
     results.innerHTML = responses.map((response) => renderColumn(response, query)).join('');
 
@@ -112,6 +128,12 @@ form.addEventListener('submit', async (event) => {
     status.textContent = error.message;
   }
 });
+
+methodSelect.addEventListener('change', updateCompareMethods);
+compareInput.addEventListener('change', () => {
+  compareMethodField.hidden = !compareInput.checked;
+});
+updateCompareMethods();
 
 const savedTheme = localStorage.getItem('ir-theme');
 if (savedTheme) {

@@ -58,9 +58,9 @@ UI_HOST=127.0.0.1 UI_PORT=8080 node ui/server.js
 - **Dense:** Semantic retrieval. It requires `data/nq/corpus.jsonl` and verified embeddings in `data/nq/embeddings/multi-qa-MiniLM-L6-cos-v1/`.
 - **Hybrid:** Combines BM25 and dense retrieval. It requires Elasticsearch and dense embeddings.
 - **Rerank:** Applies the CrossEncoder to the selected number of candidates. It downloads the model on first use and uses more CPU time.
-- **Compare methods:** Runs the selected method beside BM25, or beside the selected method itself if BM25 is already selected.
-- **Results:** Choose 5, 10, or 20 result cards.
-- **Candidates:** Choose how many documents reranking should score.
+- **Compare methods:** Turn this on to choose a second method for a side-by-side comparison with the selected method.
+- **Results:** Enter the number of result cards to show (1–1000).
+- **Candidates:** Enter how many documents reranking should score (1–1000).
 
 For the lowest memory usage, choose **BM25**, leave **Rerank** off, and do not enable dense or hybrid search.
 

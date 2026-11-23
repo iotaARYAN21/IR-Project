@@ -114,7 +114,8 @@ body {
   letter-spacing: 0.4px;
 }
 
-select {
+select,
+input[type="number"] {
   height: 36px;
   min-width: 120px;
   border: 1px solid var(--line);
@@ -123,6 +124,8 @@ select {
   color: var(--text);
   padding: 0 9px;
 }
+
+.compare-method-field[hidden] { display: none; }
 
 .switch-label {
   height: 36px;

@@ -154,8 +154,16 @@ const server = http.createServer(async (request, response) => {
           sendJson(response, 400, { error: 'Invalid search method' });
           return;
         }
-        const k = Math.max(1, Math.min(100, Number(payload.k) || 10));
-        const candidates = Math.max(1, Math.min(100, Number(payload.candidates) || 30));
+        const k = Number(payload.k);
+        const candidates = Number(payload.candidates);
+        if (!Number.isSafeInteger(k) || k < 1 || k > 1000) {
+          sendJson(response, 400, { error: 'Results must be a whole number from 1 to 1000' });
+          return;
+        }
+        if (!Number.isSafeInteger(candidates) || candidates < 1 || candidates > 1000) {
+          sendJson(response, 400, { error: 'Candidates must be a whole number from 1 to 1000' });
+          return;
+        }
         const result = await sendToBridge({
           query: payload.query.trim(),
           method: payload.method,
