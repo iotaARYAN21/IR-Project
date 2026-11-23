@@ -4,6 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const { validateSearchPayload } = require('./search-validation');
 
 const host = process.env.UI_HOST || '127.0.0.1';
 const port = Number(process.env.UI_PORT || 3000);
@@ -147,40 +148,12 @@ const server = http.createServer(async (request, response) => {
     request.on('end', async () => {
       try {
         const payload = JSON.parse(body);
-        if (!payload.query || typeof payload.query !== 'string') {
-          sendJson(response, 400, { error: 'A query is required' });
+        const validation = validateSearchPayload(payload);
+        if (validation.error) {
+          sendJson(response, 400, { error: validation.error });
           return;
         }
-        if (!['bm25', 'dense', 'hybrid','proximity'].includes(payload.method)) {
-          sendJson(response, 400, { error: 'Invalid search method' });
-          return;
-        }
-        const k = Number(payload.k);
-        const candidates = Number(payload.candidates);
-        if (!Number.isSafeInteger(k) || k < 1 || k > 1000) {
-          sendJson(response, 400, { error: 'Results must be a whole number from 1 to 1000' });
-          return;
-        }
-        if (!Number.isSafeInteger(candidates) || candidates < 1 || candidates > 1000) {
-          sendJson(response, 400, { error: 'Candidates must be a whole number from 1 to 1000' });
-          return;
-        }
-        const slop = Number(payload.slop ?? 2);
-
-        if (!Number.isSafeInteger(slop) || slop < 0 || slop > 20) {
-          sendJson(response, 400, {
-            error: 'Proximity distance must be between 0 and 20'
-          });
-          return;
-        }
-        const result = await sendToBridge({
-          query: payload.query.trim(),
-          method: payload.method,
-          k,
-          candidates,
-          rerank: Boolean(payload.rerank),
-          slop:slop
-        });
+        const result = await sendToBridge(validation.value);
         if (result && result.error) {
           sendJson(response, 500, { error: result.error });
         } else {

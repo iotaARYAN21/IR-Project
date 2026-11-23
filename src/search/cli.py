@@ -22,7 +22,8 @@ SCORE_LABELS = {
     ("proximity", False): "Proximity score",
 }
 HELP = """Type a query and press Enter. Commands:
-  :method bm25|dense|hybrid   choose the retrieval method
+  :method bm25|dense|hybrid|proximity   choose the retrieval method
+  :slop N                     proximity distance (0-20; 0 is exact phrase)
   :rerank on|off              rescore the best candidates with the CrossEncoder
   :k N                        number of results to show
   :candidates N               documents the reranker rescores
@@ -37,6 +38,7 @@ class Settings:
     k: int = 10
     rerank: bool = False
     candidates: int = 30
+    slop: int = 2
 
 
 def apply_command(settings: Settings, line: str) -> str:
@@ -68,12 +70,17 @@ def apply_command(settings: Settings, line: str) -> str:
             raise ValueError(f"Usage: :{name} N (a whole number, at least 1)")
         setattr(settings, name, int(args[0]))
         return describe(settings)
+    if name == "slop":
+        if len(args) != 1 or not args[0].isdigit() or not 0 <= int(args[0]) <= 20:
+            raise ValueError("Usage: :slop N (a whole number from 0 to 20)")
+        settings.slop = int(args[0])
+        return describe(settings)
     raise ValueError(f"Unknown command ':{name}'. Type :help.")
 
 
 def describe(settings: Settings) -> str:
     rerank = f"on ({settings.candidates} candidates)" if settings.rerank else "off"
-    return f"method={settings.method}, rerank={rerank}, results={settings.k}"
+    return f"method={settings.method}, rerank={rerank}, results={settings.k}, proximity distance={settings.slop}"
 
 
 def snippet(text: str, width: int = 240) -> str:
@@ -172,7 +179,7 @@ def run_query(engine: SearchEngine, settings: Settings, query: str, args) -> Non
         k=settings.k,
         rerank=settings.rerank,
         candidates=settings.candidates,
-        slop=2,
+        slop=settings.slop,
         depth=args.depth,
         rrf_k=args.rrf_k,
         weights=(args.bm25_weight, args.dense_weight),
@@ -188,6 +195,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Search the NQ passages.")
     parser.add_argument("--query", help="Run this one query and exit.")
     parser.add_argument("--method", choices=METHODS, default="hybrid")
+    parser.add_argument("--slop", type=int, default=2, help="Proximity distance from 0 to 20 (default: 2).")
     parser.add_argument("--rerank", action="store_true", help="Rerank with the CrossEncoder.")
     parser.add_argument("--k", type=int, default=10, help="Results to show (default: 10).")
     parser.add_argument(
@@ -226,8 +234,10 @@ def main() -> None:
     for name in ("k", "candidates", "depth"):
         if getattr(args, name) < 1:
             parser.error(f"--{name} must be at least 1")
+    if not 0 <= args.slop <= 20:
+        parser.error("--slop must be between 0 and 20")
 
-    settings = Settings(args.method, args.k, args.rerank, args.candidates)
+    settings = Settings(args.method, args.k, args.rerank, args.candidates, args.slop)
     engine = build_engine(args)
 
     if args.query is not None:

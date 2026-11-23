@@ -248,16 +248,17 @@ class CommandTests(unittest.TestCase):
         apply_command(settings, ":rerank on")
         apply_command(settings, ":k 5")
         apply_command(settings, ":candidates 20")
+        apply_command(settings, ":slop 0")
         self.assertEqual(
-            (settings.method, settings.rerank, settings.k, settings.candidates),
-            ("dense", True, 5, 20),
+            (settings.method, settings.rerank, settings.k, settings.candidates, settings.slop),
+            ("dense", True, 5, 20, 0),
         )
         apply_command(settings, ":rerank off")
         self.assertFalse(settings.rerank)
 
     def test_bad_commands_raise_and_leave_settings_alone(self):
         settings = Settings()
-        for line in (":method nope", ":rerank maybe", ":k 0", ":k abc", ":bogus", ":"):
+        for line in (":method nope", ":rerank maybe", ":k 0", ":k abc", ":slop -1", ":slop 21", ":slop abc", ":bogus", ":"):
             with self.subTest(line=line):
                 with self.assertRaises(ValueError):
                     apply_command(settings, line)
