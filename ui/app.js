@@ -10,7 +10,9 @@ const compareMethodSelect = document.querySelector('#compare-method');
 const results = document.querySelector('#results');
 const status = document.querySelector('#status');
 const themeToggle = document.querySelector('#theme-toggle');
-const methods = ['bm25', 'dense', 'hybrid'];
+const slopInput = document.querySelector('#slop');
+const slopField = document.querySelector('#slop-field');
+const methods = ['bm25', 'dense', 'hybrid', 'proximity'];
 
 function updateCompareMethods() {
   const previous = compareMethodSelect.value;
@@ -53,6 +55,10 @@ function formatTiming(response) {
   return `${response.timings_ms.total.toFixed(1)} ms total`;
 }
 
+function updateSlopVisibility() {
+  slopField.hidden = methodSelect.value !== 'proximity';
+}
+
 function renderColumn(response, query) {
   const cards = response.hits.length
     ? response.hits.map((hit, index) => `
@@ -62,7 +68,7 @@ function renderColumn(response, query) {
           <h3>${escapeHtml(hit.title || 'Untitled document')}</h3>
         </div>
         <p>${highlight(hit.text, query)}</p>
-        <div class="score">${response.reranked ? 'CrossEncoder' : response.method === 'dense' ? 'Cosine' : response.method === 'hybrid' ? 'RRF' : 'BM25'}: ${Number(hit.score).toFixed(4)}</div>
+        <div class="score">${response.reranked ? 'CrossEncoder' : response.method === 'dense' ? 'Cosine' : response.method === 'hybrid' ? 'RRF' : response.method==='proximity'? 'Proximity': 'BM25'}: ${Number(hit.score).toFixed(4)}</div>
       </article>`).join('')
     : '<div class="empty">No results.</div>';
 
@@ -85,7 +91,8 @@ async function searchOne(query, method) {
       method,
       k: Number(kInput.value),
       candidates: Number(candidatesInput.value),
-      rerank: rerankInput.checked
+      rerank: rerankInput.checked,
+      slop: Number(slopInput.value)
     })
   });
 
@@ -134,6 +141,9 @@ compareInput.addEventListener('change', () => {
   compareMethodField.hidden = !compareInput.checked;
 });
 updateCompareMethods();
+
+methodSelect.addEventListener('change', updateSlopVisibility);
+updateSlopVisibility();
 
 const savedTheme = localStorage.getItem('ir-theme');
 if (savedTheme) {

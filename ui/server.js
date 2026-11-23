@@ -42,6 +42,7 @@ while True:
             k=request["k"],
             rerank=request["rerank"],
             candidates=request["candidates"],
+            slop=request.get("slop", 2),
         )
         payload = {
             "query": response.query,
@@ -150,7 +151,7 @@ const server = http.createServer(async (request, response) => {
           sendJson(response, 400, { error: 'A query is required' });
           return;
         }
-        if (!['bm25', 'dense', 'hybrid'].includes(payload.method)) {
+        if (!['bm25', 'dense', 'hybrid','proximity'].includes(payload.method)) {
           sendJson(response, 400, { error: 'Invalid search method' });
           return;
         }
@@ -164,12 +165,21 @@ const server = http.createServer(async (request, response) => {
           sendJson(response, 400, { error: 'Candidates must be a whole number from 1 to 1000' });
           return;
         }
+        const slop = Number(payload.slop ?? 2);
+
+        if (!Number.isSafeInteger(slop) || slop < 0 || slop > 20) {
+          sendJson(response, 400, {
+            error: 'Proximity distance must be between 0 and 20'
+          });
+          return;
+        }
         const result = await sendToBridge({
           query: payload.query.trim(),
           method: payload.method,
           k,
           candidates,
-          rerank: Boolean(payload.rerank)
+          rerank: Boolean(payload.rerank),
+          slop:slop
         });
         if (result && result.error) {
           sendJson(response, 500, { error: result.error });

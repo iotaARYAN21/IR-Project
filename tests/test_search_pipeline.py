@@ -33,8 +33,12 @@ def make_engine(rerank=None):
     def fetch(ids):
         calls["fetch"].append(list(ids))
         return {doc_id: DOCS[doc_id] for doc_id in ids if doc_id in DOCS}
-
-    return SearchEngine(bm25, dense, fetch, rerank), calls
+    
+    def proximity(query, limit, slop):
+        calls.setdefault("proximity", []).append(slop)
+        return [("b", 10.0), ("a", 8.0)][:limit]
+    
+    return SearchEngine(bm25, dense, fetch, rerank,proximity), calls
 
 
 class SearchEngineTests(unittest.TestCase):
@@ -128,6 +132,23 @@ class SearchEngineTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             engine.search("q", method="bm25", rerank=True)  # no reranker configured
 
+    def test_proximity_returns_proximity_results(self):
+        engine, calls = make_engine()
+
+        response = engine.search(
+            "machine learning",
+            method="proximity",
+            k=2,
+            slop=3,
+        )
+
+        self.assertEqual(
+            [h.doc_id for h in response.hits],
+            ["b", "a"],
+        )
+
+        self.assertEqual(calls["proximity"], [3])
+        self.assertIn("proximity", response.timings_ms)
 
 class FetchDocumentsTests(unittest.TestCase):
     class FakeClient:

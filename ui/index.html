@@ -30,6 +30,7 @@
               <option value="bm25">BM25</option>
               <option value="dense">Dense</option>
               <option value="hybrid" selected>Hybrid</option>
+              <option value="proximity">Proximity Search</option>
             </select>
           </label>
 
@@ -57,6 +58,17 @@
             Compare against
             <select id="compare-method"></select>
           </label>
+
+          <label id="slop-field" hidden>
+          Proximity distance
+          <select id="slop">
+            <option value="0">0 - Exact phrase</option>
+            <option value="1">1 - Very close</option>
+            <option value="2" selected>2 - Close</option>
+            <option value="5">5 - Flexible</option>
+            <option value="10">10 - Very flexible</option>
+          </select>
+        </label>
         </div>
       </form>
     </section>

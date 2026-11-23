@@ -19,6 +19,7 @@ SCORE_LABELS = {
     ("bm25", False): "BM25 score",
     ("dense", False): "cosine similarity",
     ("hybrid", False): "RRF score",
+    ("proximity", False): "Proximity score",
 }
 HELP = """Type a query and press Enter. Commands:
   :method bm25|dense|hybrid   choose the retrieval method
@@ -127,7 +128,7 @@ def build_engine(args) -> SearchEngine:
     """Create the engine. Elasticsearch, vectors and models load on first use."""
     from src.indexing.config import create_es_client
     from src.indexing.encode_corpus import DEFAULT_MODEL, EMBEDDINGS_ROOT
-    from src.search.bm25 import search_with_scores
+    from src.search.bm25 import (search_with_scores,search_proximity_with_scores)
     from src.search.documents import fetch_documents
 
     embeddings_dir = args.embeddings_dir or EMBEDDINGS_ROOT / DEFAULT_MODEL.split("/")[-1]
@@ -146,6 +147,9 @@ def build_engine(args) -> SearchEngine:
     def bm25_search(query, limit):
         return search_with_scores(client.get(), query, limit, args.index)
 
+    def proximity_search(query, limit,slop):
+        return search_proximity_with_scores(client.get(),query,limit,slop=slop,index_name=args.index,)
+
     def dense_search(query, limit):
         from src.search.dense import encode_queries
         index, encoder = dense.get()
@@ -158,7 +162,7 @@ def build_engine(args) -> SearchEngine:
         from src.search.rerank import rerank_scores
         return rerank_scores(reranker.get(), query, texts)
 
-    return SearchEngine(bm25_search, dense_search, fetch, rerank)
+    return SearchEngine(bm25=bm25_search,dense=dense_search,fetch=fetch,rerank=rerank,proximity=proximity_search,)
 
 
 def run_query(engine: SearchEngine, settings: Settings, query: str, args) -> None:
@@ -168,6 +172,7 @@ def run_query(engine: SearchEngine, settings: Settings, query: str, args) -> Non
         k=settings.k,
         rerank=settings.rerank,
         candidates=settings.candidates,
+        slop=2,
         depth=args.depth,
         rrf_k=args.rrf_k,
         weights=(args.bm25_weight, args.dense_weight),

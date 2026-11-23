@@ -15,11 +15,12 @@ from src.search.hybrid import (
     reciprocal_rank_fusion,
 )
 
-METHODS = ("bm25", "dense", "hybrid")
+METHODS = ("bm25", "dense", "hybrid","proximity")
 
 SearchFn = Callable[[str, int], list[tuple[str, float]]]
 FetchFn = Callable[[Sequence[str]], dict[str, dict]]
 RerankFn = Callable[[str, Sequence[str]], list[float]]
+ProximityFn = Callable[[str, int, int], list[tuple[str, float]]]
 
 
 @dataclass
@@ -46,11 +47,13 @@ class SearchEngine:
         dense: SearchFn | None = None,
         fetch: FetchFn | None = None,
         rerank: RerankFn | None = None,
+        proximity: ProximityFn | None = None,
     ):
         self._bm25 = bm25
         self._dense = dense
         self._fetch = fetch
         self._rerank = rerank
+        self._proximity = proximity
 
     def search(
         self,
@@ -60,6 +63,7 @@ class SearchEngine:
         rerank: bool = False,
         candidates: int = 30,
         depth: int = 100,
+        slop: int = 2,
         rrf_k: int = HYBRID_RRF_K,
         weights: tuple[float, float] = (1.0, HYBRID_DENSE_WEIGHT),
     ) -> SearchResponse:
@@ -74,6 +78,8 @@ class SearchEngine:
             raise ValueError(f"method must be one of {METHODS}, not {method!r}")
         if k < 1 or candidates < 1 or depth < 1:
             raise ValueError("k, candidates and depth must be at least 1")
+        if slop < 0 or slop > 20:
+            raise ValueError("slop must be between 0 and 20")
 
         timings: dict[str, float] = {}
         started = time.perf_counter()
@@ -94,6 +100,8 @@ class SearchEngine:
             ranked = timed("bm25", self._require(self._bm25, "BM25"), query, pool)
         elif method == "dense":
             ranked = timed("dense", self._require(self._dense, "dense"), query, pool)
+        elif method == "proximity":
+            ranked = timed("proximity",self._require(self._proximity,"proximity search"),query,pool,slop)
         else:
             bm25_hits = timed(
                 "bm25", self._require(self._bm25, "BM25"), query, max(depth, pool)
