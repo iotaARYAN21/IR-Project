@@ -354,28 +354,6 @@ about 4 GB of RAM and some seconds to load, and the reranker model is
 downloaded on first use. Reranking 30 candidates on a CPU takes roughly half a
 second, and 100 candidates close to two seconds.
 
-## Run all evaluations
-
-`scripts/run_all_evaluations.sh` runs every evaluation in the right order
-(dense, BM25, hybrid, BM25 + reranker, hybrid + reranker), then the
-significance tests and the summary table. By default it first waits until
-`constraint_sensitivity.py` has finished and the machine has gone quiet, so the
-latency numbers are not distorted by other jobs.
-
-```bash
-export ELASTICSEARCH_PASSWORD="..."              # required (and ELASTICSEARCH_CA_CERT)
-bash scripts/run_all_evaluations.sh --quick      # 50-query test of the script itself
-bash scripts/run_all_evaluations.sh --manage-es  # the full run
-```
-
-Options: `--manage-es` stops Elasticsearch before the dense run and starts it
-only for the BM25 run (saves RAM; without it Elasticsearch must already be
-running for the BM25 step), `--skip-wait` does not wait, `--dry-run` only
-prints the steps. `WAIT_FOR`, `QUIET_LOAD`, `MAX_WAIT_MINUTES` and `ES_HOME`
-can be set as environment variables (see the top of the script). The output is
-also written to `results/logs/`. Expect roughly 3.5 to 6.5 hours on a CPU
-laptop, most of it the two reranker runs.
-
 ## Saved results and significance testing
 
 Each evaluator saves its results to a JSON file: `results/bm25_k10.json` for
