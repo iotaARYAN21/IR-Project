@@ -44,6 +44,10 @@ while True:
             rerank=request["rerank"],
             candidates=request["candidates"],
             slop=request.get("slop", 2),
+            title_only=request.get("titleOnly", False),
+            exact_phrase=request.get("exactPhrase", False),
+            must_include=request.get("mustInclude") or None,
+            must_exclude=request.get("mustExclude") or None,
         )
         payload = {
             "query": response.query,

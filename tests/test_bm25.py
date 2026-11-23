@@ -28,6 +28,26 @@ class ProximitySearchTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             search_proximity_with_scores(self.FakeClient(), "q", slop=-1)
 
+    def test_builds_custom_boolean_search(self):
+        client = self.FakeClient()
+        # Reuse fake hits response to inspect the generated Elasticsearch request.
+        from src.search.bm25 import search_with_scores
+        search_with_scores(
+            client, "climate change", title_only=True,
+            must_include="policy", must_exclude="sports", exact_phrase=True,
+        )
+        self.assertEqual(client.request["query"], {
+            "bool": {
+                "must": [
+                    {"match_phrase": {"title": "climate change"}},
+                    {"multi_match": {"query": "policy", "fields": ["title^2"]}},
+                ],
+                "must_not": [
+                    {"multi_match": {"query": "sports", "fields": ["title^2"]}},
+                ],
+            }
+        })
+
 
 if __name__ == "__main__":
     unittest.main()

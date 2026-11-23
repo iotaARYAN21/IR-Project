@@ -19,6 +19,14 @@ function validateSearchPayload(payload) {
   if (!Number.isSafeInteger(slop) || slop < 0 || slop > 20) {
     return { error: 'Proximity distance must be between 0 and 20' };
   }
+  for (const field of ['mustInclude', 'mustExclude']) {
+    if (payload[field] !== undefined && typeof payload[field] !== 'string') {
+      return { error: `${field} must be text` };
+    }
+    if ((payload[field] || '').length > 200) {
+      return { error: `${field} must be 200 characters or fewer` };
+    }
+  }
   return {
     value: {
       query: payload.query.trim(),
@@ -27,6 +35,10 @@ function validateSearchPayload(payload) {
       candidates,
       rerank: Boolean(payload.rerank),
       slop,
+      titleOnly: Boolean(payload.titleOnly),
+      exactPhrase: Boolean(payload.exactPhrase),
+      mustInclude: (payload.mustInclude || '').trim(),
+      mustExclude: (payload.mustExclude || '').trim(),
     },
   };
 }

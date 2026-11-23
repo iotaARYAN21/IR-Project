@@ -12,7 +12,8 @@ test('accepts proximity slop boundaries and normalizes the API payload', () => {
     assert.deepEqual(result, {
       value: {
         query: 'machine learning', method: 'proximity', k: 10,
-        candidates: 30, rerank: false, slop,
+        candidates: 30, rerank: false, slop, titleOnly: false,
+        exactPhrase: false, mustInclude: '', mustExclude: '',
       },
     });
   }
@@ -29,4 +30,16 @@ test('rejects out of range, fractional, and non numeric slop', () => {
       'Proximity distance must be between 0 and 20',
     );
   }
+});
+
+test('normalizes advanced search options and rejects oversized terms', () => {
+  const result = validateSearchPayload({
+    ...validPayload, exactPhrase: true, titleOnly: true,
+    mustInclude: ' policy ', mustExclude: 'sports',
+  });
+  assert.equal(result.value.exactPhrase, true);
+  assert.equal(result.value.titleOnly, true);
+  assert.equal(result.value.mustInclude, 'policy');
+  assert.equal(result.value.mustExclude, 'sports');
+  assert.match(validateSearchPayload({ ...validPayload, mustInclude: 'x'.repeat(201) }).error, /200 characters/);
 });

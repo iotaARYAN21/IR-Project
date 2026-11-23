@@ -22,8 +22,10 @@ results using standard ranking metrics.
   exactly. See "Document embeddings" and "Dense (semantic) retrieval".
 - Added hybrid retrieval that fuses BM25 and dense results with reciprocal
   rank fusion (see "Hybrid retrieval").
-- Added a command-line search tool for BM25, dense and hybrid retrieval, with
-  optional reranking and per-stage timings (see "Live search").
+- Added a command-line search tool for BM25, dense, hybrid and proximity
+  retrieval, with optional reranking and per-stage timings (see "Live search").
+- Added a browser UI with proximity distance controls and BM25 Advanced Search
+  options for exact phrases, required or excluded terms, and title-only search.
 - Added unit tests for the metrics, latency, fusion, dense search, encoder and
   search pipeline code.
 - Added setup and run instructions below.
@@ -98,21 +100,14 @@ Roughly in the order we plan to do it:
    search. The method is not chosen yet. The simplest candidate is another
    Elasticsearch similarity (for example language-model Dirichlet scoring),
    which needs a second index.
-5. **Web UI.** A browser interface on top of the same search code the
-   command-line tool uses:
-   - a search box with a method selector (BM25, dense, hybrid) and a reranking
-     switch;
-   - result cards with the title, a snippet and the score, and per-stage timings
-     for each search;
-   - side-by-side results from two methods for the same query, to show how they
-     differ;
-   - the search features below (highlighting, suggestions, "Did you mean?")
-     added to it as they are built.
-   It needs a small server that loads the engine once at startup. The dense
-   vectors take 4 GB of RAM, so the memory use on the demo machine matters.
-6. **Search features:** query expansion and proximity search, autocomplete,
-   spelling correction ("Did you mean?"), and smart snippets with the matching
-   words highlighted. The index already stores term offsets for highlighting.
+5. **Web UI improvements.** The UI now supports BM25, dense, hybrid and
+   proximity methods, reranking, side-by-side comparisons, highlighted terms,
+   proximity distance, and BM25 Advanced Search. Further work could add query
+   expansion, autocomplete and spelling correction ("Did you mean?"). The
+   dense vectors take 4 GB of RAM, so memory use on the demo machine matters.
+6. **Search features:** query expansion, autocomplete, spelling correction
+   ("Did you mean?"), and smart snippets. The index already stores term offsets
+   for highlighting.
 7. **Preprocessing and the index:** improve and document tokenization,
    lowercasing, stemming or lemmatization, stopword handling, and term
    positions or frequencies. This needs a rebuilt index and about 10 GB of
@@ -345,24 +340,37 @@ and distort the latency.
 
 ## Live search (command line)
 
-`src/search/cli.py` searches the passages interactively with BM25, dense or
-hybrid retrieval, with optional CrossEncoder reranking. It needs Elasticsearch
-running (it supplies the passage text) and the same connection settings as the
-evaluators. Dense and hybrid search also need the document vectors.
+`src/search/cli.py` searches the passages interactively with BM25, dense,
+hybrid or proximity retrieval, with optional CrossEncoder reranking. It needs
+Elasticsearch running (it supplies the passage text) and the same connection
+settings as the evaluators. Dense and hybrid search also need the document
+vectors.
 
 ```bash
 python3 -m src.search.cli                                   # interactive
 python3 -m src.search.cli --method hybrid --query "who wrote hamlet"
 python3 -m src.search.cli --method bm25 --rerank --candidates 30 --k 5 --query "..."
+python3 -m src.search.cli --method proximity --slop 0 --query "climate change"
 ```
 
-In interactive mode, type a query, or a command: `:method bm25|dense|hybrid`,
-`:rerank on|off`, `:k N`, `:candidates N`, `:settings`, `:help`, `:quit`. Each
-answer lists the results with a short snippet and the time spent in every
-stage. Components load the first time they are used: the dense vectors take
-about 4 GB of RAM and some seconds to load, and the reranker model is
-downloaded on first use. Reranking 30 candidates on a CPU takes roughly half a
-second, and 100 candidates close to two seconds.
+For proximity search, `--slop` sets the phrase distance from 0 (exact phrase)
+to 20 (more flexible). The default is 2. In interactive mode, type a query or
+use `:method bm25|dense|hybrid|proximity`, `:slop N`, `:rerank on|off`, `:k N`,
+`:candidates N`, `:settings`, `:help` or `:quit`. Each answer lists the results
+with a short snippet and the time spent in every stage. Components load the
+first time they are used: the dense vectors take about 4 GB of RAM and some
+seconds to load, and the reranker model is downloaded on first use. Reranking
+30 candidates on a CPU takes roughly half a second, and 100 candidates close to
+two seconds.
+
+## Web search UI
+
+The browser UI uses the same search pipeline. It supports method selection,
+reranking, method comparison and proximity distance. When BM25 is selected,
+expand **Advanced search** to request an exact phrase, require or exclude terms,
+or search titles only. These BM25 options apply to the BM25 result column when
+comparing methods. Follow [ui.md](ui.md) to start the UI and configure
+Elasticsearch.
 
 ## Saved results and significance testing
 

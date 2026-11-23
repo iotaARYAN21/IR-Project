@@ -70,6 +70,27 @@
           </select>
         </label>
         </div>
+        <details id="advanced-search" class="advanced-search" hidden>
+          <summary>Advanced search</summary>
+          <div class="controls advanced-controls">
+            <label class="switch-label">
+              <input id="exact-phrase" type="checkbox">
+              <span>Exact phrase</span>
+            </label>
+            <label class="switch-label">
+              <input id="title-only" type="checkbox">
+              <span>Search title only</span>
+            </label>
+            <label>
+              Must include
+              <input id="must-include" type="text" maxlength="200" placeholder="e.g. policy">
+            </label>
+            <label>
+              Must exclude
+              <input id="must-exclude" type="text" maxlength="200" placeholder="e.g. sports">
+            </label>
+          </div>
+        </details>
       </form>
     </section>
 

@@ -64,6 +64,10 @@ class SearchEngine:
         candidates: int = 30,
         depth: int = 100,
         slop: int = 2,
+        title_only: bool = False,
+        must_include: str | None = None,
+        must_exclude: str | None = None,
+        exact_phrase: bool = False,
         rrf_k: int = HYBRID_RRF_K,
         weights: tuple[float, float] = (1.0, HYBRID_DENSE_WEIGHT),
     ) -> SearchResponse:
@@ -97,7 +101,11 @@ class SearchEngine:
 
         pool = max(k, candidates) if rerank else k
         if method == "bm25":
-            ranked = timed("bm25", self._require(self._bm25, "BM25"), query, pool)
+            bm25 = self._require(self._bm25, "BM25")
+            if title_only or must_include or must_exclude or exact_phrase:
+                ranked = timed("bm25", bm25, query, pool, title_only, must_include, must_exclude, exact_phrase)
+            else:
+                ranked = timed("bm25", bm25, query, pool)
         elif method == "dense":
             ranked = timed("dense", self._require(self._dense, "dense"), query, pool)
         elif method == "proximity":

@@ -12,6 +12,11 @@ const status = document.querySelector('#status');
 const themeToggle = document.querySelector('#theme-toggle');
 const slopInput = document.querySelector('#slop');
 const slopField = document.querySelector('#slop-field');
+const advancedSearch = document.querySelector('#advanced-search');
+const exactPhraseInput = document.querySelector('#exact-phrase');
+const titleOnlyInput = document.querySelector('#title-only');
+const mustIncludeInput = document.querySelector('#must-include');
+const mustExcludeInput = document.querySelector('#must-exclude');
 const methods = ['bm25', 'dense', 'hybrid', 'proximity'];
 
 function updateCompareMethods() {
@@ -92,7 +97,11 @@ async function searchOne(query, method) {
       k: Number(kInput.value),
       candidates: Number(candidatesInput.value),
       rerank: rerankInput.checked,
-      slop: Number(slopInput.value)
+      slop: Number(slopInput.value),
+      exactPhrase: method === 'bm25' && exactPhraseInput.checked,
+      titleOnly: method === 'bm25' && titleOnlyInput.checked,
+      mustInclude: method === 'bm25' ? mustIncludeInput.value : '',
+      mustExclude: method === 'bm25' ? mustExcludeInput.value : ''
     })
   });
 
@@ -144,6 +153,11 @@ updateCompareMethods();
 
 methodSelect.addEventListener('change', updateSlopVisibility);
 updateSlopVisibility();
+function updateAdvancedSearchVisibility() {
+  advancedSearch.hidden = methodSelect.value !== 'bm25';
+}
+methodSelect.addEventListener('change', updateAdvancedSearchVisibility);
+updateAdvancedSearchVisibility();
 
 const savedTheme = localStorage.getItem('ir-theme');
 if (savedTheme) {

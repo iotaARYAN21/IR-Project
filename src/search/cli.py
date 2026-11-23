@@ -151,8 +151,12 @@ def build_engine(args) -> SearchEngine:
     dense = Lazy("dense index and query encoder", load_dense)
     reranker = Lazy("reranker model", load_reranker_model)
 
-    def bm25_search(query, limit):
-        return search_with_scores(client.get(), query, limit, args.index)
+    def bm25_search(query, limit, title_only=False, must_include=None, must_exclude=None, exact_phrase=False):
+        return search_with_scores(
+            client.get(), query, limit, args.index,
+            title_only=title_only, must_include=must_include,
+            must_exclude=must_exclude, exact_phrase=exact_phrase,
+        )
 
     def proximity_search(query, limit,slop):
         return search_proximity_with_scores(client.get(),query,limit,slop=slop,index_name=args.index,)
