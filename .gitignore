@@ -5,3 +5,4 @@ data/nq/embeddings/
 __pycache__
 scratch/
 results/logs/
+.env

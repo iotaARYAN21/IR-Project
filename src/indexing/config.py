@@ -6,6 +6,33 @@ from elasticsearch import Elasticsearch
 
 # Project paths
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def load_env_file(path: Path) -> None:
+    """Set variables from a .env file, without overriding ones already set.
+
+    Lines look like KEY=value or export KEY="value". Blank lines and lines
+    starting with # are ignored. Variables already in the environment win, so a
+    value exported in the terminal overrides the file.
+    """
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].lstrip()
+        key, _, value = line.partition("=")
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        key = key.strip()
+        if key:
+            os.environ.setdefault(key, value)
+
+
+load_env_file(PROJECT_ROOT / ".env")
 DATASET_DIR = PROJECT_ROOT / "data" / "nq"
 CORPUS_FILE = DATASET_DIR / "corpus.jsonl"
 
