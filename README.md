@@ -137,15 +137,25 @@ source .venv/bin/activate
 python3 -m pip install -r requirements.txt
 ```
 
-Start Elasticsearch locally, then set its connection details. For a local
-Elasticsearch installation that uses its generated HTTPS certificate:
+Start Elasticsearch locally, then set its connection details. The simplest way
+is a `.env` file in the project root, which the code reads automatically (it is
+ignored by git, so the password is not committed):
 
 ```bash
-export ELASTICSEARCH_URL="https://localhost:9200"
-export ELASTICSEARCH_USERNAME="elastic"
-export ELASTICSEARCH_PASSWORD="your-password"
-export ELASTICSEARCH_CA_CERT="/path/to/http_ca.crt"
+cp .env.example .env     # then edit .env and fill in your password and certificate path
 ```
+
+```bash
+ELASTICSEARCH_URL="https://localhost:9200"
+ELASTICSEARCH_USERNAME="elastic"
+ELASTICSEARCH_PASSWORD="your-password"
+ELASTICSEARCH_CA_CERT="/path/to/http_ca.crt"
+```
+
+Variables already set in the terminal (`export NAME=...`) take priority over
+the file. The commands below that run in the terminal and not through the
+Python code (for example `curl`) need the file loaded into the shell with
+`set -a; source .env; set +a`.
 
 `ELASTICSEARCH_CA_CERT` is optional when the server certificate is already
 trusted by your system. The index name defaults to `nq_documents`; override it
@@ -453,7 +463,7 @@ grows with (number of queries × number of candidates).
 ### How to run it
 
 Start Elasticsearch, build the index (see above), and set the same connection
-variables as for the BM25 evaluator. On Linux or macOS:
+variables as for the BM25 evaluator. The easiest way is the `.env` file described under "Data and setup". Otherwise, on Linux or macOS:
 
 ```bash
 export ELASTICSEARCH_URL="https://localhost:9200"
