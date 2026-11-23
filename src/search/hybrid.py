@@ -2,6 +2,12 @@
 
 from collections.abc import Sequence
 
+# Defaults of the BM25 + dense hybrid, chosen on a dev split of the queries
+# (see src/evaluation/tune_hybrid.py). BM25 has weight 1. The generic function
+# below keeps the textbook default rrf_k = 60.
+HYBRID_RRF_K = 10
+HYBRID_DENSE_WEIGHT = 1.5
+
 
 def reciprocal_rank_fusion(
     rankings: Sequence[Sequence[str]],

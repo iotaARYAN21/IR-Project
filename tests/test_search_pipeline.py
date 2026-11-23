@@ -1,8 +1,16 @@
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from src.search.cli import Settings, apply_command, format_response, format_timings
-from src.search.documents import fetch_documents
-from src.search.hybrid import reciprocal_rank_fusion
+from src.search.documents import fetch_documents, load_corpus_texts
+from src.search.rerank import rerank_run_queries
+from src.search.hybrid import (
+    HYBRID_DENSE_WEIGHT,
+    HYBRID_RRF_K,
+    reciprocal_rank_fusion,
+)
 from src.search.pipeline import SearchEngine
 
 DOCS = {
@@ -46,7 +54,9 @@ class SearchEngineTests(unittest.TestCase):
         engine, _ = make_engine()
         response = engine.search("q", method="hybrid", k=5, depth=4)
         expected = reciprocal_rank_fusion(
-            [["a", "b", "c", "d"], ["c", "e", "b", "f"]], 60, [1.0, 1.0]
+            [["a", "b", "c", "d"], ["c", "e", "b", "f"]],
+            HYBRID_RRF_K,
+            [1.0, HYBRID_DENSE_WEIGHT],
         )
         self.assertEqual(
             [h.doc_id for h in response.hits], [d for d, _ in expected][:5]
@@ -147,6 +157,67 @@ class FetchDocumentsTests(unittest.TestCase):
         client = self.FakeClient()
         self.assertEqual(fetch_documents(client, [], "idx"), {})
         self.assertIsNone(client.request)
+
+
+class LoadCorpusTextsTests(unittest.TestCase):
+    def _corpus(self, directory):
+        path = Path(directory) / "corpus.jsonl"
+        rows = [
+            {"_id": "d1", "title": "One", "text": "first"},
+            {"_id": "d2", "title": "", "text": "second"},
+            {"_id": "d3", "title": "Three", "text": "third"},
+        ]
+        path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+        return path
+
+    def test_returns_title_and_text_for_requested_ids_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            texts = load_corpus_texts(self._corpus(directory), ["d1", "d2", "missing"])
+        self.assertEqual(texts, {"d1": "One first", "d2": "second"})
+
+    def test_no_ids_reads_nothing(self):
+        self.assertEqual(load_corpus_texts(Path("/no/such/file"), []), {})
+
+
+class RerankRunQueriesTests(unittest.TestCase):
+    RUN = {"q1": [("a", 3.0), ("b", 2.0), ("c", 1.0)], "q2": [("c", 2.0), ("a", 1.0)]}
+    DOCS = {"a": "text a", "b": "text b", "c": "text c"}
+    QUERIES = {"q1": "first query", "q2": "second query"}
+
+    def test_reorders_by_score_and_reports_one_time_per_query(self):
+        def prefer_c_then_a(query, texts):
+            order = {"text c": 2.0, "text a": 1.0, "text b": 0.0}
+            return [order[t] for t in texts]
+
+        reranked, seconds = rerank_run_queries(
+            ["q1", "q2"], self.QUERIES, self.RUN, self.DOCS, prefer_c_then_a, 3
+        )
+        self.assertEqual([d for d, _ in reranked["q1"]], ["c", "a", "b"])
+        self.assertEqual([d for d, _ in reranked["q2"]], ["c", "a"])
+        self.assertEqual(reranked["q1"][0], ("c", 2.0))
+        self.assertEqual(len(seconds), 2)
+
+    def test_only_the_top_candidates_are_scored(self):
+        seen = []
+        rerank_run_queries(
+            ["q1"], self.QUERIES, self.RUN, self.DOCS,
+            lambda q, texts: seen.append((q, list(texts))) or [0.0] * len(texts), 2,
+        )
+        self.assertEqual(seen, [("first query", ["text a", "text b"])])
+
+    def test_equal_scores_keep_the_original_order(self):
+        reranked, _ = rerank_run_queries(
+            ["q1"], self.QUERIES, self.RUN, self.DOCS, lambda q, t: [1.0] * len(t), 3
+        )
+        self.assertEqual([d for d, _ in reranked["q1"]], ["a", "b", "c"])
+
+    def test_missing_text_and_bad_scorer_are_errors(self):
+        with self.assertRaises(ValueError):
+            rerank_run_queries(["q1"], self.QUERIES, self.RUN, {"a": "x"}, lambda q, t: [0.0] * len(t), 3)
+        with self.assertRaises(ValueError):
+            rerank_run_queries(["q1"], self.QUERIES, self.RUN, self.DOCS, lambda q, t: [0.0], 3)
+        with self.assertRaises(ValueError):
+            rerank_run_queries(["q1"], self.QUERIES, self.RUN, self.DOCS, lambda q, t: [], 0)
 
 
 class CommandTests(unittest.TestCase):
