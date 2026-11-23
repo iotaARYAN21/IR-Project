@@ -127,22 +127,26 @@ def build_engine(args) -> SearchEngine:
     from src.indexing.config import create_es_client
     from src.indexing.encode_corpus import DEFAULT_MODEL, EMBEDDINGS_ROOT
     from src.search.bm25 import search_with_scores
-    from src.search.dense import DenseIndex, encode_queries, load_query_encoder
     from src.search.documents import fetch_documents
-    from src.search.rerank import load_reranker, rerank_scores
 
     embeddings_dir = args.embeddings_dir or EMBEDDINGS_ROOT / DEFAULT_MODEL.split("/")[-1]
     client = Lazy("Elasticsearch connection", create_es_client)
-    dense = Lazy(
-        "dense index and query encoder",
-        lambda: (DenseIndex.from_directory(embeddings_dir), load_query_encoder(DEFAULT_MODEL)),
-    )
-    reranker = Lazy("reranker model", load_reranker)
+    def load_dense():
+        from src.search.dense import DenseIndex, encode_queries, load_query_encoder
+        return DenseIndex.from_directory(embeddings_dir), load_query_encoder(DEFAULT_MODEL)
+
+    def load_reranker_model():
+        from src.search.rerank import load_reranker
+        return load_reranker()
+
+    dense = Lazy("dense index and query encoder", load_dense)
+    reranker = Lazy("reranker model", load_reranker_model)
 
     def bm25_search(query, limit):
         return search_with_scores(client.get(), query, limit, args.index)
 
     def dense_search(query, limit):
+        from src.search.dense import encode_queries
         index, encoder = dense.get()
         return index.search_vectors(encode_queries(encoder, [query]), limit)[0]
 
@@ -150,6 +154,7 @@ def build_engine(args) -> SearchEngine:
         return fetch_documents(client.get(), ids, args.index)
 
     def rerank(query, texts):
+        from src.search.rerank import rerank_scores
         return rerank_scores(reranker.get(), query, texts)
 
     return SearchEngine(bm25_search, dense_search, fetch, rerank)

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IR Search Console</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">IR<span>Search</span></div>
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle theme">Dark</button>
+  </header>
+
+  <main class="container">
+    <section class="search-panel" aria-label="Search settings">
+      <form id="search-form">
+        <div class="search-row">
+          <label class="search-box">
+            <span class="sr-only">Search query</span>
+            <input id="query" name="query" type="search" placeholder="Search the NQ document collection" autocomplete="off" required>
+          </label>
+          <button class="search-button" type="submit">Search</button>
+        </div>
+
+        <div class="controls">
+          <label>
+            Method
+            <select id="method">
+              <option value="bm25">BM25</option>
+              <option value="dense">Dense</option>
+              <option value="hybrid" selected>Hybrid</option>
+            </select>
+          </label>
+
+          <label>
+            Results
+            <select id="k">
+              <option value="5">5</option>
+              <option value="10" selected>10</option>
+              <option value="20">20</option>
+            </select>
+          </label>
+
+          <label>
+            Candidates
+            <select id="candidates">
+              <option value="30" selected>30</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </label>
+
+          <label class="switch-label">
+            <input id="rerank" type="checkbox">
+            <span>Rerank</span>
+          </label>
+
+          <label class="switch-label">
+            <input id="compare" type="checkbox">
+            <span>Compare methods</span>
+          </label>
+        </div>
+      </form>
+    </section>
+
+    <div id="status" class="status" role="status"></div>
+    <section id="results" class="results-grid" aria-live="polite"></section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
