@@ -12,6 +12,7 @@ import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.search.hybrid import HYBRID_DENSE_WEIGHT, HYBRID_RRF_K
 from src.search.pipeline import METHODS, SearchEngine, SearchResponse
 
 SCORE_LABELS = {
@@ -191,9 +192,19 @@ def main() -> None:
         default=100,
         help="Documents taken from each of BM25 and dense search before fusing (default: 100).",
     )
-    parser.add_argument("--rrf-k", type=int, default=60, help="RRF constant (default: 60).")
+    parser.add_argument(
+        "--rrf-k",
+        type=int,
+        default=HYBRID_RRF_K,
+        help=f"RRF constant (default: {HYBRID_RRF_K}).",
+    )
     parser.add_argument("--bm25-weight", type=float, default=1.0)
-    parser.add_argument("--dense-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--dense-weight",
+        type=float,
+        default=HYBRID_DENSE_WEIGHT,
+        help=f"Dense list weight (default: {HYBRID_DENSE_WEIGHT}).",
+    )
     parser.add_argument("--index", default=INDEX_NAME, help="Elasticsearch index.")
     parser.add_argument(
         "--embeddings-dir",

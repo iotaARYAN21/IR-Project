@@ -17,7 +17,11 @@ from src.evaluation.latency import (
 from src.evaluation.metrics import evaluate_rankings, per_query_scores
 from src.evaluation.results import default_output_path, save_results
 from src.evaluation.runs import default_run_path, load_run, save_run
-from src.search.hybrid import reciprocal_rank_fusion
+from src.search.hybrid import (
+    HYBRID_DENSE_WEIGHT,
+    HYBRID_RRF_K,
+    reciprocal_rank_fusion,
+)
 
 
 def main() -> None:
@@ -45,14 +49,17 @@ def main() -> None:
     parser.add_argument(
         "--rrf-k",
         type=int,
-        default=60,
-        help="Reciprocal rank fusion constant (default: 60).",
+        default=HYBRID_RRF_K,
+        help=f"Reciprocal rank fusion constant (default: {HYBRID_RRF_K}).",
     )
     parser.add_argument(
         "--bm25-weight", type=float, default=1.0, help="Weight of the BM25 list."
     )
     parser.add_argument(
-        "--dense-weight", type=float, default=1.0, help="Weight of the dense list."
+        "--dense-weight",
+        type=float,
+        default=HYBRID_DENSE_WEIGHT,
+        help=f"Weight of the dense list (default: {HYBRID_DENSE_WEIGHT}).",
     )
     parser.add_argument(
         "--run-depth",

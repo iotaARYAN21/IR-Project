@@ -6,7 +6,11 @@ from pathlib import Path
 from src.search.cli import Settings, apply_command, format_response, format_timings
 from src.search.documents import fetch_documents, load_corpus_texts
 from src.search.rerank import rerank_run_queries
-from src.search.hybrid import reciprocal_rank_fusion
+from src.search.hybrid import (
+    HYBRID_DENSE_WEIGHT,
+    HYBRID_RRF_K,
+    reciprocal_rank_fusion,
+)
 from src.search.pipeline import SearchEngine
 
 DOCS = {
@@ -50,7 +54,9 @@ class SearchEngineTests(unittest.TestCase):
         engine, _ = make_engine()
         response = engine.search("q", method="hybrid", k=5, depth=4)
         expected = reciprocal_rank_fusion(
-            [["a", "b", "c", "d"], ["c", "e", "b", "f"]], 60, [1.0, 1.0]
+            [["a", "b", "c", "d"], ["c", "e", "b", "f"]],
+            HYBRID_RRF_K,
+            [1.0, HYBRID_DENSE_WEIGHT],
         )
         self.assertEqual(
             [h.doc_id for h in response.hits], [d for d, _ in expected][:5]

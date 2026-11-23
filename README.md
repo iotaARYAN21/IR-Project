@@ -28,9 +28,8 @@ results using standard ranking metrics.
   search pipeline code.
 - Added setup and run instructions below.
 
-The code for all of the above is written and tested, but not every full
-evaluation has been run yet. The results table below is filled in as the runs
-finish.
+The code for all of the above is written and tested, and the full evaluations
+have been run (see Results below).
 
 The NQ query and qrels files are included. The document corpus and the
 embeddings are not, so they need to be downloaded separately (see "Data and
@@ -38,31 +37,63 @@ setup" and "Document embeddings").
 
 ## Results
 
-Full test set (3,452 queries), cutoff k = 10. *To be filled in from the saved
-`results/*.json` files. `python3 -m src.evaluation.summarize` prints this table
-from them.*
+Full test set (3,452 queries), cutoff k = 10, run on a laptop CPU (i7-1255U,
+no GPU). The tables come from the saved `results/*.json` files;
+`python3 -m src.evaluation.summarize` prints them again.
 
-| System | NDCG@10 | MRR@10 | Recall@10 | Mean latency (ms) |
-| --- | --- | --- | --- | --- |
-| BM25 | | | | |
-| Dense | | | | |
-| Hybrid (BM25 + dense, RRF) | | | | |
-| BM25 + reranker | | | | |
-| Hybrid + reranker | | | | |
+Recall@100 is the recall of the 100 candidates each system returns, which is
+the ceiling for the reranker. Mean latency of hybrid and reranked systems is the
+sum of their stage means. The last column is the NDCG difference from BM25 with
+a paired bootstrap p-value.
+
+| System | NDCG@10 | MRR@10 | Recall@10 | Recall@100 | Mean latency (ms) | NDCG@10 vs BM25 | Queries |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| BM25 | 0.2802 | 0.2547 | 0.3900 | 0.6355 | 15.0 | baseline | 3452 |
+| Dense | 0.4464 | 0.3930 | 0.6559 | 0.8874 | 324.8 | +0.1662* (p < 0.0010) | 3452 |
+| Hybrid, equal weights (RRF k = 60) | 0.4247 | 0.3752 | 0.6167 | 0.8788 | 339.9 | +0.1446* (p < 0.0010) | 3452 |
+| Hybrid, tuned (dense 1.5, k = 10) † | 0.4779 | 0.4265 | 0.6829 | 0.8858 | 339.9 | +0.1977* (p < 0.0010) | 3452 |
+| BM25 + reranker | 0.4726 | 0.4441 | 0.5950 | 0.6355 | 3479.8 | +0.1924* (p < 0.0010) | 3452 |
+| Equal-weight hybrid + reranker | 0.5737 | 0.5264 | 0.7649 | 0.8788 | 3795.4 | +0.2935* (p < 0.0010) | 3452 |
+
+`*` = significant at p < 0.05 (paired bootstrap against BM25).
+
+† Dense weight 1.5 (BM25 weight 1), RRF k 10, chosen on 1036 dev queries. The row covers all queries, including those dev queries, so it is slightly optimistic. On the 2416 held-out queries NDCG@10 is 0.4776, against 0.4276 for the equal-weight hybrid.
+
+Latency by stage (per query):
+
+| Stage | Mean (ms) | Median (ms) | p95 (ms) |
+| --- | --- | --- | --- |
+| BM25 search | 15.0 | 13.1 | 27.3 |
+| Dense: encode query | 116.8 | 107.9 | 130.8 |
+| Dense: exact search | 208.0 | 218.1 | 268.8 |
+| Dense: total | 324.8 | 302.7 | 399.3 |
+| RRF fusion | 0.0 | 0.0 | 0.1 |
+| Rerank top-100 of BM25 | 3464.8 | 3366.3 | 4803.0 |
+| Rerank top-100 of equal-weight hybrid | 3455.5 | 3357.7 | 4978.4 |
+
+### Tuning the hybrid without overfitting
+
+`python3 -m src.evaluation.tune_hybrid` splits the judged queries once (seed 0)
+into 30% dev and 70% held-out. It tries a small grid of dense weights
+(0.5 to 4, BM25 fixed at 1) and RRF constants (10, 20, 30, 40, 50, 60) on the dev queries
+only, picks the best by dev NDCG@10, then scores that choice and the default
+(equal weights, k = 60) on the held-out queries with a paired bootstrap. Only the
+held-out numbers should be reported. Results are saved to
+`results/tuning/hybrid_tuning.json`.
 
 ## What remains to be done
 
 Roughly in the order we plan to do it:
 
-1. **Run the full evaluations and record the results.** BM25, dense, hybrid
-   and BM25 + reranker on the whole test set (the reranker takes hours on CPU),
-   then run `src.evaluation.compare` on each pair and fill in the table above.
-2. **Hybrid + reranker.** Run `src.evaluation.evaluate_rerank` on the fused
-   run file (see "Reranking a saved run"). It can run on a GPU machine to save
-   time. Caching the CrossEncoder scores, since the BM25 and hybrid candidate
-   lists overlap heavily, is not done yet.
-3. **Tune the hybrid.** Try different fusion weights and RRF constants on a
-   held-out part of the queries, not the test queries.
+1. **Pairwise significance tests.** The table compares every system with
+   BM25. Run `src.evaluation.compare` on the other pairs the report needs
+   (for example dense vs hybrid, and hybrid vs hybrid + reranker).
+2. **CrossEncoder score caching.** The BM25 and hybrid candidate lists overlap
+   heavily, so cached scores would save most of the reranking time. Not done.
+3. **Hybrid defaults.** The tuned setting (dense weight 1.5, RRF k = 10) is now
+   the default in the evaluator, pipeline and CLI. The reranker was run on the
+   equal-weight hybrid (`hybrid_equal_rerank`); reranking the tuned hybrid is not
+   needed to compare fusion settings.
 4. **A retrieval method that does not use BM25**, combined with semantic
    search. The method is not chosen yet. The simplest candidate is another
    Elasticsearch similarity (for example language-model Dirichlet scoring),
@@ -259,11 +290,17 @@ BM25 and cosine score scales need no normalising. Options:
 | --- | --- | --- |
 | `--k` | `10` | Rank cutoff for NDCG, MRR and Recall. |
 | `--candidates` | `100` | Top documents taken from each run before fusing. |
-| `--rrf-k` | `60` | RRF constant. Larger values flatten the difference between ranks. |
-| `--bm25-weight`, `--dense-weight` | `1.0` | Weight of each list. |
+| `--rrf-k` | `10` | RRF constant. Larger values flatten the difference between ranks. |
+| `--bm25-weight` | `1.0` | Weight of the BM25 list. |
+| `--dense-weight` | `1.5` | Weight of the dense list. |
 | `--run-depth` | `100` | Fused documents saved to `results/runs/hybrid.json`. |
 
-The fused run is saved so it can be reranked later. The hybrid latency is
+The defaults (dense weight 1.5, RRF k = 10) were tuned on a dev split of the
+queries (see "Tuning the hybrid"). The equal-weight hybrid in the results
+table is `--dense-weight 1 --rrf-k 60`; its files are `hybrid_equal_k10.json`
+and `results/runs/hybrid_equal.json`, while `hybrid_k10.json` and
+`results/runs/hybrid.json` hold the tuned default. The fused run is saved so it
+can be reranked later. The hybrid latency is
 estimated as BM25 + dense + fusion (mean latencies, systems run one after the
 other), because the two searches are measured in their own runs. If dense was
 run with `--batch-queries`, no latency is stored and no estimate is printed.
@@ -285,7 +322,7 @@ python3 -m src.evaluation.evaluate_rerank --run results/runs/bm25.json          
 Options: `--candidates` (default 100, top documents to rerank, at most the run's
 depth), `--k`, `--model`, `--batch-size`, `--max-queries`, `--warmup`,
 `--output` and `--run-output`. Results are saved as `results/<run system>_rerank_k10.json`
-(for example `hybrid_rerank`), so `src.evaluation.compare` works on them.
+(for example `bm25_rerank`), so `src.evaluation.compare` works on them.
 
 **Timing.** It measures the time the model takes to score each query's
 candidates (the rerank stage only, not reading the text) and prints the median,

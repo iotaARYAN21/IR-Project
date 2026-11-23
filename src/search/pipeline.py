@@ -9,7 +9,11 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
-from src.search.hybrid import reciprocal_rank_fusion
+from src.search.hybrid import (
+    HYBRID_DENSE_WEIGHT,
+    HYBRID_RRF_K,
+    reciprocal_rank_fusion,
+)
 
 METHODS = ("bm25", "dense", "hybrid")
 
@@ -56,8 +60,8 @@ class SearchEngine:
         rerank: bool = False,
         candidates: int = 30,
         depth: int = 100,
-        rrf_k: int = 60,
-        weights: tuple[float, float] = (1.0, 1.0),
+        rrf_k: int = HYBRID_RRF_K,
+        weights: tuple[float, float] = (1.0, HYBRID_DENSE_WEIGHT),
     ) -> SearchResponse:
         """Search and return the top k hits with per-stage timings.
 
