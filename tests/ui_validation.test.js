@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { validateSearchPayload } = require('../ui/search-validation');
+const { validateSearchPayload, validateSuggestQuery } = require('../ui/search-validation');
 
 const validPayload = { query: '  machine learning ', method: 'bm25', k: '10', candidates: '30' };
 
@@ -72,4 +72,11 @@ test('diversity is optional and must be between 0 and 1', () => {
       'Diversity must be a number from 0 to 1',
     );
   }
+});
+
+test('suggestion text is trimmed, too-short text has no suggestions, long text is rejected', () => {
+  assert.deepEqual(validateSuggestQuery('  jag '), { value: 'jag', tooShort: false });
+  assert.equal(validateSuggestQuery('j').tooShort, true);
+  assert.equal(validateSuggestQuery(undefined).tooShort, true);
+  assert.match(validateSuggestQuery('x'.repeat(101)).error, /100 characters/);
 });

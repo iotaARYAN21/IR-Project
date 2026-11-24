@@ -16,10 +16,14 @@
     <section class="search-panel" aria-label="Search settings">
       <form id="search-form">
         <div class="search-row">
-          <label class="search-box">
-            <span class="sr-only">Search query</span>
-            <input id="query" name="query" type="search" placeholder="Search the NQ document collection" autocomplete="off" required>
-          </label>
+          <div class="search-box">
+            <label>
+              <span class="sr-only">Search query</span>
+              <input id="query" name="query" type="search" placeholder="Search the NQ document collection" autocomplete="off" required
+                role="combobox" aria-autocomplete="list" aria-controls="suggestions" aria-expanded="false">
+            </label>
+            <ul id="suggestions" class="suggestions" role="listbox" aria-label="Article title suggestions" hidden></ul>
+          </div>
           <button class="search-button" type="submit">Search</button>
         </div>
 

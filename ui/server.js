@@ -4,7 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const { validateSearchPayload } = require('./search-validation');
+const { validateSearchPayload, validateSuggestQuery } = require('./search-validation');
 
 const host = process.env.UI_HOST || '127.0.0.1';
 const port = Number(process.env.UI_PORT || 3000);
@@ -37,6 +37,10 @@ while True:
         break
     try:
         request = json.loads(line)
+        if request.get("action") == "suggest":
+            titles = engine.suggest(request["prefix"], request.get("limit", 8))
+            original_print(json.dumps({"suggestions": titles}), file=stdout, flush=True)
+            continue
         response = engine.search(
             request["query"],
             method=request["method"],
@@ -141,6 +145,26 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === 'GET' && url.pathname === '/api/status') {
     sendJson(response, 200, { status: bridge && bridge.exitCode === null ? 'ready' : 'starting' });
+    return;
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/suggest') {
+    const validation = validateSuggestQuery(url.searchParams.get('q') || '');
+    if (validation.error) {
+      sendJson(response, 400, { error: validation.error });
+      return;
+    }
+    if (validation.tooShort) {
+      sendJson(response, 200, { suggestions: [] });
+      return;
+    }
+    try {
+      const result = await sendToBridge({ action: 'suggest', prefix: validation.value, limit: 8 });
+      if (result && result.error) sendJson(response, 500, { error: result.error });
+      else sendJson(response, 200, result);
+    } catch (error) {
+      sendJson(response, 500, { error: error.message || 'Suggestions failed' });
+    }
     return;
   }
 

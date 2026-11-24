@@ -69,7 +69,35 @@ body {
 
 .search-row { display: flex; gap: 10px; }
 
-.search-box { flex: 1; }
+.search-box { flex: 1; position: relative; }
+.search-box label { display: block; }
+
+.suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.suggestions li {
+  padding: 9px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.suggestions li[aria-selected="true"],
+.suggestions li:hover { background: var(--soft); }
+
+.suggestions strong { font-weight: 700; }
 
 .search-box input {
   width: 100%;

@@ -166,6 +166,23 @@ class SearchEngineTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             engine.search("q", method="bm25", diversity=1.5)
 
+    def test_suggest_returns_titles_and_needs_two_characters(self):
+        seen = []
+
+        def suggest(prefix, limit):
+            seen.append((prefix, limit))
+            return [("Jaguar", 40), ("Jaguar Cars", 12)]
+
+        engine = SearchEngine(suggest=suggest)
+        self.assertEqual(engine.suggest(" jag ", 5), ["Jaguar", "Jaguar Cars"])
+        self.assertEqual(seen, [("jag", 5)])
+        self.assertEqual(engine.suggest("j"), [])
+        self.assertEqual(seen, [("jag", 5)])  # one character: nothing asked
+        with self.assertRaises(ValueError):
+            engine.suggest("jag", limit=0)
+        with self.assertRaises(RuntimeError):
+            SearchEngine().suggest("jag")
+
     def test_proximity_is_no_longer_a_separate_method(self):
         engine, _ = make_engine()
         with self.assertRaises(ValueError):

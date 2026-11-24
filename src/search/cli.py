@@ -156,7 +156,7 @@ def build_engine(args) -> SearchEngine:
     """Create the engine. Elasticsearch, vectors and models load on first use."""
     from src.indexing.config import create_es_client
     from src.indexing.encode_corpus import DEFAULT_MODEL, EMBEDDINGS_ROOT
-    from src.search.bm25 import search_with_scores
+    from src.search.bm25 import search_with_scores, suggest_titles
     from src.search.documents import fetch_documents
 
     embeddings_dir = args.embeddings_dir or EMBEDDINGS_ROOT / DEFAULT_MODEL.split("/")[-1]
@@ -196,11 +196,14 @@ def build_engine(args) -> SearchEngine:
     def fetch(ids):
         return fetch_documents(client.get(), ids, args.index)
 
+    def title_suggestions(prefix, limit):
+        return suggest_titles(client.get(), prefix, limit, args.index)
+
     def rerank(query, texts):
         from src.search.rerank import rerank_scores
         return rerank_scores(reranker.get(), query, texts)
 
-    return SearchEngine(bm25_search, dense_search, fetch, rerank)
+    return SearchEngine(bm25_search, dense_search, fetch, rerank, title_suggestions)
 
 
 def run_query(engine: SearchEngine, settings: Settings, query: str, args) -> None:

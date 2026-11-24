@@ -55,4 +55,17 @@ function validateSearchPayload(payload) {
   };
 }
 
-module.exports = { validateSearchPayload };
+const MIN_SUGGEST_CHARS = 2;
+const MAX_SUGGEST_CHARS = 100;
+
+// Text typed so far, for title suggestions. Too short is not an error: it just
+// has no suggestions.
+function validateSuggestQuery(text) {
+  const query = typeof text === 'string' ? text.trim() : '';
+  if (query.length > MAX_SUGGEST_CHARS) {
+    return { error: `Text must be ${MAX_SUGGEST_CHARS} characters or fewer` };
+  }
+  return { value: query, tooShort: query.length < MIN_SUGGEST_CHARS };
+}
+
+module.exports = { validateSearchPayload, validateSuggestQuery };

@@ -406,7 +406,10 @@ boost, which applies to BM25 and hybrid. When BM25 is selected,
 expand **Advanced search** to request an exact phrase, require or exclude terms,
 or search titles only. Title only applies to the main query; the required and
 excluded terms are checked in the title and the text. These BM25 options apply to the BM25 result column when
-comparing methods. Follow [ui.md](ui.md) to start the UI and configure
+comparing methods. Typing at least two characters in the search box shows
+article titles that start with them (autocomplete): the titles come from the
+exact-string `title.raw` field, are grouped, and are ranked by how many passages
+each has. Use the arrow keys and Enter, or click, to choose one. Follow [ui.md](ui.md) to start the UI and configure
 Elasticsearch.
 
 ## Saved results and significance testing

@@ -76,3 +76,31 @@ def search(
     return [
         doc_id for doc_id, _ in search_with_scores(client, query, limit, index_name)
     ]
+
+
+def suggest_titles(
+    client: Elasticsearch,
+    prefix: str,
+    limit: int = 8,
+    index_name: str = INDEX_NAME,
+) -> list[tuple[str, int]]:
+    """Article titles that start with `prefix` (case ignored), as (title, passages).
+
+    Uses the exact-string `title.raw` field. The titles are grouped, and the ones
+    with the most passages come first (big articles have many passages), so the
+    list is a rough popularity ranking.
+    """
+    if limit < 1:
+        raise ValueError("limit must be at least 1")
+    prefix = prefix.strip()
+    if not prefix:
+        return []
+
+    response = client.search(
+        index=index_name,
+        size=0,
+        query={"prefix": {"title.raw": {"value": prefix, "case_insensitive": True}}},
+        aggs={"titles": {"terms": {"field": "title.raw", "size": limit}}},
+    )
+    buckets = response["aggregations"]["titles"]["buckets"]
+    return [(bucket["key"], int(bucket["doc_count"])) for bucket in buckets]

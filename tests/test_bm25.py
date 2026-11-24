@@ -1,6 +1,6 @@
 import unittest
 
-from src.search.bm25 import search_with_scores
+from src.search.bm25 import search_with_scores, suggest_titles
 
 
 class ProximitySearchTests(unittest.TestCase):
@@ -75,6 +75,46 @@ class ProximitySearchTests(unittest.TestCase):
                 ],
             }
         })
+
+
+class SuggestTitlesTests(unittest.TestCase):
+    class FakeClient:
+        def search(self, **kwargs):
+            self.request = kwargs
+            return {
+                "aggregations": {
+                    "titles": {
+                        "buckets": [
+                            {"key": "Jaguar", "doc_count": 40},
+                            {"key": "Jaguar Cars", "doc_count": 12},
+                        ]
+                    }
+                }
+            }
+
+    def test_asks_for_titles_starting_with_the_prefix_ignoring_case(self):
+        client = self.FakeClient()
+        titles = suggest_titles(client, " jag ", limit=5, index_name="custom")
+        self.assertEqual(titles, [("Jaguar", 40), ("Jaguar Cars", 12)])
+        self.assertEqual(client.request["index"], "custom")
+        self.assertEqual(client.request["size"], 0)
+        self.assertEqual(
+            client.request["query"],
+            {"prefix": {"title.raw": {"value": "jag", "case_insensitive": True}}},
+        )
+        self.assertEqual(
+            client.request["aggs"],
+            {"titles": {"terms": {"field": "title.raw", "size": 5}}},
+        )
+
+    def test_blank_prefix_returns_nothing_without_a_query(self):
+        client = self.FakeClient()
+        self.assertEqual(suggest_titles(client, "   "), [])
+        self.assertFalse(hasattr(client, "request"))
+
+    def test_rejects_bad_limit(self):
+        with self.assertRaises(ValueError):
+            suggest_titles(self.FakeClient(), "jag", limit=0)
 
 
 if __name__ == "__main__":

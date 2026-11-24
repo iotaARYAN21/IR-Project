@@ -1,6 +1,7 @@
 const form = document.querySelector('#search-form');
 const queryInput = document.querySelector('#query');
 const methodSelect = document.querySelector('#method');
+const suggestionList = document.querySelector('#suggestions');
 const kInput = document.querySelector('#k');
 const candidatesInput = document.querySelector('#candidates');
 const rerankInput = document.querySelector('#rerank');
@@ -21,6 +22,97 @@ const exactPhraseInput = document.querySelector('#exact-phrase');
 const titleOnlyInput = document.querySelector('#title-only');
 const mustIncludeInput = document.querySelector('#must-include');
 const mustExcludeInput = document.querySelector('#must-exclude');
+const suggestDelayMs = 150;
+const minSuggestChars = 2;
+let suggestTimer = null;
+let suggestRequest = 0;
+let activeSuggestion = -1;
+
+function closeSuggestions() {
+  suggestionList.hidden = true;
+  suggestionList.replaceChildren();
+  queryInput.setAttribute('aria-expanded', 'false');
+  activeSuggestion = -1;
+}
+
+function highlightSuggestion(index) {
+  const items = [...suggestionList.children];
+  activeSuggestion = items.length ? (index + items.length) % items.length : -1;
+  items.forEach((item, i) => item.setAttribute('aria-selected', String(i === activeSuggestion)));
+}
+
+function chooseSuggestion(title) {
+  queryInput.value = title;
+  closeSuggestions();
+  form.requestSubmit();
+}
+
+function showSuggestions(titles, typed) {
+  if (!titles.length) {
+    closeSuggestions();
+    return;
+  }
+  suggestionList.replaceChildren(...titles.map((title) => {
+    const item = document.createElement('li');
+    item.setAttribute('role', 'option');
+    item.setAttribute('aria-selected', 'false');
+    // Bold the part the user already typed. textContent keeps it safe from HTML.
+    const strong = document.createElement('strong');
+    strong.textContent = title.slice(0, typed.length);
+    item.append(strong, document.createTextNode(title.slice(typed.length)));
+    // mousedown fires before the input loses focus, so the click is not lost.
+    item.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      chooseSuggestion(title);
+    });
+    return item;
+  }));
+  suggestionList.hidden = false;
+  queryInput.setAttribute('aria-expanded', 'true');
+  activeSuggestion = -1;
+}
+
+async function fetchSuggestions() {
+  const typed = queryInput.value.trim();
+  if (typed.length < minSuggestChars) {
+    closeSuggestions();
+    return;
+  }
+  const requestId = ++suggestRequest;
+  try {
+    const response = await fetch(`/api/suggest?q=${encodeURIComponent(typed)}`);
+    if (!response.ok) throw new Error('Suggestions failed');
+    const data = await response.json();
+    // Ignore answers to older keystrokes that arrive late.
+    if (requestId === suggestRequest) showSuggestions(data.suggestions || [], typed);
+  } catch (error) {
+    if (requestId === suggestRequest) closeSuggestions();
+  }
+}
+
+queryInput.addEventListener('input', () => {
+  clearTimeout(suggestTimer);
+  suggestTimer = setTimeout(fetchSuggestions, suggestDelayMs);
+});
+
+queryInput.addEventListener('keydown', (event) => {
+  if (suggestionList.hidden) return;
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    highlightSuggestion(activeSuggestion + 1);
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    highlightSuggestion(activeSuggestion - 1);
+  } else if (event.key === 'Enter' && activeSuggestion >= 0) {
+    event.preventDefault();
+    chooseSuggestion(suggestionList.children[activeSuggestion].textContent);
+  } else if (event.key === 'Escape') {
+    closeSuggestions();
+  }
+});
+
+queryInput.addEventListener('blur', closeSuggestions);
+
 const methods = ['bm25', 'dense', 'hybrid'];
 const proximityMethods = ['bm25', 'hybrid'];
 
@@ -132,6 +224,10 @@ async function searchOne(query, method, slopInputEl) {
 form.addEventListener('submit', async (event) => {
   event.preventEvent?.();
   event.preventDefault();
+  // A search ends any pending suggestion lookup.
+  clearTimeout(suggestTimer);
+  suggestRequest += 1;
+  closeSuggestions();
 
   const query = queryInput.value.trim();
   if (!query) return;

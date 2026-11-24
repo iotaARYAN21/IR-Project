@@ -20,10 +20,12 @@ METHODS = ("bm25", "dense", "hybrid")
 # Largest proximity distance accepted. Any whole number from 0 up to this works;
 # the limit only guards against typing a huge value by mistake.
 MAX_SLOP = 100
+MIN_SUGGEST_CHARS = 2
 
 SearchFn = Callable[[str, int], list[tuple[str, float]]]
 FetchFn = Callable[[Sequence[str]], dict[str, dict]]
 RerankFn = Callable[[str, Sequence[str]], list[float]]
+SuggestFn = Callable[[str, int], list[tuple[str, int]]]
 
 
 @dataclass
@@ -50,11 +52,27 @@ class SearchEngine:
         dense: SearchFn | None = None,
         fetch: FetchFn | None = None,
         rerank: RerankFn | None = None,
+        suggest: SuggestFn | None = None,
     ):
         self._bm25 = bm25
         self._dense = dense
         self._fetch = fetch
         self._rerank = rerank
+        self._suggest = suggest
+
+    def suggest(self, prefix: str, limit: int = 8) -> list[str]:
+        """Article titles that start with what the user has typed so far.
+
+        Needs at least MIN_SUGGEST_CHARS characters; shorter input gives nothing,
+        because a one-letter prefix matches far too many titles to be useful.
+        """
+        if limit < 1:
+            raise ValueError("limit must be at least 1")
+        prefix = prefix.strip()
+        if len(prefix) < MIN_SUGGEST_CHARS:
+            return []
+        titles = self._require(self._suggest, "title suggestions")(prefix, limit)
+        return [title for title, _ in titles]
 
     def search(
         self,
