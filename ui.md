@@ -1,4 +1,4 @@
-# UI setup and run commands
+# NQSearch UI: setup and run commands
 
 The UI is written with vanilla JavaScript, HTML, and CSS. There is no `.env` file and no JavaScript framework dependency.
 

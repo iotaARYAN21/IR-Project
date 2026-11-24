@@ -1,6 +1,6 @@
-# Information Retrieval Project
+# NQSearch: Information Retrieval Project
 
-This is a course project about building and comparing search methods using
+NQSearch is a course project about building and comparing search methods using
 the Natural Questions (NQ) dataset. The aim is to start with a BM25 baseline,
 then add other retrieval methods and search features, and compare their
 results using standard ranking metrics.

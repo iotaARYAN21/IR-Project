@@ -219,5 +219,5 @@ const server = http.createServer(async (request, response) => {
 
 startBridge();
 server.listen(port, host, () => {
-  console.log(`IR Search UI: http://${host}:${port}`);
+  console.log(`NQSearch UI: http://${host}:${port}`);
 });
