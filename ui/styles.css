@@ -124,6 +124,19 @@ body {
   cursor: pointer;
 }
 
+.clear-button {
+  height: 48px;
+  min-width: 80px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.clear-button:hover { background: var(--soft); }
+
 .controls {
   display: flex;
   align-items: end;

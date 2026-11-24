@@ -12,6 +12,7 @@ const compareMethodSelect = document.querySelector('#compare-method');
 const results = document.querySelector('#results');
 const status = document.querySelector('#status');
 const themeToggle = document.querySelector('#theme-toggle');
+const clearButton = document.querySelector('#clear');
 const slopInput = document.querySelector('#slop');
 const slopField = document.querySelector('#slop-field');
 const compareSlopInput = document.querySelector('#compare-slop');
@@ -259,6 +260,18 @@ form.addEventListener('submit', async (event) => {
     status.className = 'status error';
     status.textContent = error.message;
   }
+});
+
+// Clear removes the results and the query. The settings stay as they are.
+clearButton.addEventListener('click', () => {
+  clearTimeout(suggestTimer);
+  suggestRequest += 1;
+  closeSuggestions();
+  results.innerHTML = '';
+  status.className = 'status';
+  status.textContent = '';
+  queryInput.value = '';
+  queryInput.focus();
 });
 
 methodSelect.addEventListener('change', () => {
