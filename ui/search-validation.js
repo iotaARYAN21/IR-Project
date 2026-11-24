@@ -1,5 +1,7 @@
 'use strict';
 
+const MAX_SLOP = 100;
+
 function validateSearchPayload(payload) {
   if (!payload.query || typeof payload.query !== 'string') {
     return { error: 'A query is required' };
@@ -18,8 +20,8 @@ function validateSearchPayload(payload) {
   // Proximity is optional: a missing, null or blank value leaves it off.
   const slopGiven = payload.slop !== undefined && payload.slop !== null && payload.slop !== '';
   const slop = slopGiven ? Number(payload.slop) : null;
-  if (slopGiven && (!Number.isSafeInteger(slop) || slop < 0 || slop > 20)) {
-    return { error: 'Proximity distance must be between 0 and 20' };
+  if (slopGiven && (!Number.isSafeInteger(slop) || slop < 0 || slop > MAX_SLOP)) {
+    return { error: `Proximity distance must be a whole number from 0 to ${MAX_SLOP}` };
   }
   for (const field of ['mustInclude', 'mustExclude']) {
     if (payload[field] !== undefined && typeof payload[field] !== 'string') {

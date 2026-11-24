@@ -352,7 +352,7 @@ python3 -m src.search.cli --method bm25 --rerank --candidates 30 --k 5 --query "
 python3 -m src.search.cli --method bm25 --slop 2 --query "climate change"
 ```
 
-`--slop N` (0 to 20) turns on the **proximity boost** in BM25, and so also in the
+`--slop N` (any whole number from 0 to 100) turns on the **proximity boost** in BM25, and so also in the
 BM25 half of hybrid search: passages that contain the query words within N
 positions of each other get a higher score (0 means next to each other, in
 order). Other passages are still returned, so it only changes the ranking.
@@ -372,7 +372,8 @@ The browser UI uses the same search pipeline. It supports method selection,
 reranking, method comparison and the proximity boost, which applies to BM25 and
 hybrid. When BM25 is selected,
 expand **Advanced search** to request an exact phrase, require or exclude terms,
-or search titles only. These BM25 options apply to the BM25 result column when
+or search titles only. Title only applies to the main query; the required and
+excluded terms are checked in the title and the text. These BM25 options apply to the BM25 result column when
 comparing methods. Follow [ui.md](ui.md) to start the UI and configure
 Elasticsearch.
 

@@ -102,7 +102,7 @@ function renderColumn(response, query) {
     </section>`;
 }
 
-async function searchOne(query, method, slopSelect) {
+async function searchOne(query, method, slopInputEl) {
   const response = await fetch('/api/search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -112,8 +112,8 @@ async function searchOne(query, method, slopSelect) {
       k: Number(kInput.value),
       candidates: Number(candidatesInput.value),
       rerank: rerankInput.checked,
-      slop: proximityMethods.includes(method) && slopSelect.value !== ''
-        ? Number(slopSelect.value)
+      slop: proximityMethods.includes(method) && slopInputEl.value !== ''
+        ? Number(slopInputEl.value)
         : null,
       exactPhrase: method === 'bm25' && exactPhraseInput.checked,
       titleOnly: method === 'bm25' && titleOnlyInput.checked,
@@ -144,7 +144,7 @@ form.addEventListener('submit', async (event) => {
     if (compareInput.checked) searches.push([compareMethodSelect.value, compareSlopInput]);
 
     const responses = await Promise.all(
-      searches.map(([method, slopSelect]) => searchOne(query, method, slopSelect))
+      searches.map(([method, slopInputEl]) => searchOne(query, method, slopInputEl))
     );
     results.style.setProperty('--columns', String(responses.length));
     results.innerHTML = responses.map((response) => renderColumn(response, query)).join('');

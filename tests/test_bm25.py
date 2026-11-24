@@ -67,11 +67,11 @@ class ProximitySearchTests(unittest.TestCase):
             "bool": {
                 "must": [
                     {"match_phrase": {"title": "climate change"}},
-                    {"multi_match": {"query": "policy", "fields": ["title^2"]}},
+                    {"multi_match": {"query": "policy", "fields": ["title^2", "text"]}},
                 ],
                 "should": [],
                 "must_not": [
-                    {"multi_match": {"query": "sports", "fields": ["title^2"]}},
+                    {"multi_match": {"query": "sports", "fields": ["title^2", "text"]}},
                 ],
             }
         })

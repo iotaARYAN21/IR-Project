@@ -25,7 +25,10 @@ def search_with_scores(
     if not query.strip():
         return []
 
+    # title_only restricts only the main query to the title. The must include and
+    # must exclude terms are filters, so they look in the title and the text.
     fields = ["title^2"] if title_only else ["title^2", "text"]
+    filter_fields = ["title^2", "text"]
     main_query = (
         {"match_phrase": {"title": query}} if title_only and exact_phrase
         else {"multi_match": {"query": query, "type": "phrase", "fields": fields}}
@@ -36,9 +39,9 @@ def search_with_scores(
     should = []
     must_not = []
     if must_include and must_include.strip():
-        must.append({"multi_match": {"query": must_include, "fields": fields}})
+        must.append({"multi_match": {"query": must_include, "fields": filter_fields}})
     if must_exclude and must_exclude.strip():
-        must_not.append({"multi_match": {"query": must_exclude, "fields": fields}})
+        must_not.append({"multi_match": {"query": must_exclude, "fields": filter_fields}})
     if proximity_slop is not None and not exact_phrase:
         should.append(
             {

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.search.hybrid import HYBRID_DENSE_WEIGHT, HYBRID_RRF_K
-from src.search.pipeline import METHODS, SearchEngine, SearchResponse
+from src.search.pipeline import MAX_SLOP, METHODS, SearchEngine, SearchResponse
 
 SCORE_LABELS = {
     ("bm25", False): "BM25 score",
@@ -22,7 +22,7 @@ SCORE_LABELS = {
 }
 HELP = """Type a query and press Enter. Commands:
   :method bm25|dense|hybrid   choose the retrieval method
-  :slop off|N                 BM25 proximity boost: words within N positions (0-20)
+  :slop off|N                 BM25 proximity boost: words within N positions (0-100)
   :rerank on|off              rescore the best candidates with the CrossEncoder
   :k N                        number of results to show
   :candidates N               documents the reranker rescores
@@ -73,8 +73,8 @@ def apply_command(settings: Settings, line: str) -> str:
         if len(args) == 1 and args[0] == "off":
             settings.slop = None
             return describe(settings)
-        if len(args) != 1 or not args[0].isdigit() or not 0 <= int(args[0]) <= 20:
-            raise ValueError("Usage: :slop off|N (a whole number from 0 to 20)")
+        if len(args) != 1 or not args[0].isdigit() or not 0 <= int(args[0]) <= MAX_SLOP:
+            raise ValueError(f"Usage: :slop off|N (a whole number from 0 to {MAX_SLOP})")
         settings.slop = int(args[0])
         return describe(settings)
     raise ValueError(f"Unknown command ':{name}'. Type :help.")
@@ -216,7 +216,7 @@ def main() -> None:
         type=int,
         default=None,
         help="Boost BM25 passages whose query words are within this many "
-        "positions (0 to 20). Default: off.",
+        "positions (0 to 100). Default: off.",
     )
     parser.add_argument("--rerank", action="store_true", help="Rerank with the CrossEncoder.")
     parser.add_argument("--k", type=int, default=10, help="Results to show (default: 10).")
@@ -256,8 +256,8 @@ def main() -> None:
     for name in ("k", "candidates", "depth"):
         if getattr(args, name) < 1:
             parser.error(f"--{name} must be at least 1")
-    if args.slop is not None and not 0 <= args.slop <= 20:
-        parser.error("--slop must be between 0 and 20")
+    if args.slop is not None and not 0 <= args.slop <= MAX_SLOP:
+        parser.error(f"--slop must be between 0 and {MAX_SLOP}")
 
     settings = Settings(args.method, args.k, args.rerank, args.candidates, args.slop)
     engine = build_engine(args)

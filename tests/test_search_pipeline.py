@@ -149,7 +149,7 @@ class SearchEngineTests(unittest.TestCase):
 
     def test_rejects_slop_out_of_range(self):
         engine, _ = make_engine()
-        for slop in (-1, 21):
+        for slop in (-1, 101):
             with self.assertRaises(ValueError):
                 engine.search("q", method="bm25", slop=slop)
 
@@ -264,7 +264,7 @@ class CommandTests(unittest.TestCase):
 
     def test_bad_commands_raise_and_leave_settings_alone(self):
         settings = Settings()
-        for line in (":method nope", ":rerank maybe", ":k 0", ":k abc", ":slop -1", ":slop 21", ":slop abc", ":bogus", ":"):
+        for line in (":method nope", ":rerank maybe", ":k 0", ":k abc", ":slop -1", ":slop 101", ":slop abc", ":bogus", ":"):
             with self.subTest(line=line):
                 with self.assertRaises(ValueError):
                     apply_command(settings, line)

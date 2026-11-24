@@ -16,6 +16,9 @@ from src.search.hybrid import (
 )
 
 METHODS = ("bm25", "dense", "hybrid")
+# Largest proximity distance accepted. Any whole number from 0 up to this works;
+# the limit only guards against typing a huge value by mistake.
+MAX_SLOP = 100
 
 SearchFn = Callable[[str, int], list[tuple[str, float]]]
 FetchFn = Callable[[Sequence[str]], dict[str, dict]]
@@ -80,8 +83,8 @@ class SearchEngine:
             raise ValueError(f"method must be one of {METHODS}, not {method!r}")
         if k < 1 or candidates < 1 or depth < 1:
             raise ValueError("k, candidates and depth must be at least 1")
-        if slop is not None and not 0 <= slop <= 20:
-            raise ValueError("slop must be between 0 and 20")
+        if slop is not None and not 0 <= slop <= MAX_SLOP:
+            raise ValueError(f"slop must be between 0 and {MAX_SLOP}")
 
         timings: dict[str, float] = {}
         started = time.perf_counter()

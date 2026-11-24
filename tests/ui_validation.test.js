@@ -7,7 +7,7 @@ const { validateSearchPayload } = require('../ui/search-validation');
 const validPayload = { query: '  machine learning ', method: 'bm25', k: '10', candidates: '30' };
 
 test('accepts proximity slop boundaries and normalizes the API payload', () => {
-  for (const slop of [0, 20]) {
+  for (const slop of [0, 7, 100]) {
     const result = validateSearchPayload({ ...validPayload, slop });
     assert.deepEqual(result, {
       value: {
@@ -26,10 +26,10 @@ test('leaves proximity off when slop is missing, null or blank', () => {
 });
 
 test('rejects out of range, fractional, and non numeric slop', () => {
-  for (const slop of [-1, 21, 1.5, 'near']) {
+  for (const slop of [-1, 101, 1.5, 'near']) {
     assert.equal(
       validateSearchPayload({ ...validPayload, slop }).error,
-      'Proximity distance must be between 0 and 20',
+      'Proximity distance must be a whole number from 0 to 100',
     );
   }
 });

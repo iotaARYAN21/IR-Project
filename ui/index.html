@@ -35,14 +35,7 @@
             </label>
             <label id="slop-field" class="slop-field is-inactive">
               Proximity
-              <select id="slop">
-                <option value="" selected>Off</option>
-                <option value="0">0 - Next to each other</option>
-                <option value="1">1 - Very close</option>
-                <option value="2">2 - Close</option>
-                <option value="5">5 - Flexible</option>
-                <option value="10">10 - Very flexible</option>
-              </select>
+              <input id="slop" type="number" min="0" max="100" step="1" placeholder="Off" title="Leave empty for off. 0 = next to each other; larger = words may be further apart.">
             </label>
           </div>
 
@@ -73,18 +66,11 @@
             </label>
             <label id="compare-slop-field" class="slop-field is-inactive">
               Proximity
-              <select id="compare-slop">
-                <option value="" selected>Off</option>
-                <option value="0">0 - Next to each other</option>
-                <option value="1">1 - Very close</option>
-                <option value="2">2 - Close</option>
-                <option value="5">5 - Flexible</option>
-                <option value="10">10 - Very flexible</option>
-              </select>
+              <input id="compare-slop" type="number" min="0" max="100" step="1" placeholder="Off" title="Leave empty for off. 0 = next to each other; larger = words may be further apart.">
             </label>
           </div>
         </div>
-        <p id="proximity-hint" class="hint" hidden>Proximity ranks passages higher when the query words are close together. It applies to BM25 and hybrid only.</p>
+        <p id="proximity-hint" class="hint" hidden>Proximity (words apart): leave empty for off, 0 means next to each other, larger numbers allow the words to be further apart. It ranks passages with the query words close together higher, and applies to BM25 and hybrid only.</p>
 
         <details id="advanced-search" class="advanced-search" hidden>
           <summary>Custom BM25 search</summary>
@@ -96,7 +82,7 @@
             </label>
             <label class="switch-label">
               <input id="title-only" type="checkbox">
-              <span>Search title only</span>
+              <span title="The main query must match the title. Must include / exclude still check title and text.">Search title only</span>
             </label>
             <label>
               Must include
