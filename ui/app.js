@@ -4,6 +4,7 @@ const methodSelect = document.querySelector('#method');
 const kInput = document.querySelector('#k');
 const candidatesInput = document.querySelector('#candidates');
 const rerankInput = document.querySelector('#rerank');
+const diversityInput = document.querySelector('#diversity');
 const compareInput = document.querySelector('#compare');
 const compareMethodField = document.querySelector('#compare-method-field');
 const compareMethodSelect = document.querySelector('#compare-method');
@@ -112,6 +113,7 @@ async function searchOne(query, method, slopInputEl) {
       k: Number(kInput.value),
       candidates: Number(candidatesInput.value),
       rerank: rerankInput.checked,
+      diversity: diversityInput.value !== '' ? Number(diversityInput.value) : null,
       slop: proximityMethods.includes(method) && slopInputEl.value !== ''
         ? Number(slopInputEl.value)
         : null,

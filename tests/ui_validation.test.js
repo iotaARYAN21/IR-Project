@@ -12,7 +12,7 @@ test('accepts proximity slop boundaries and normalizes the API payload', () => {
     assert.deepEqual(result, {
       value: {
         query: 'machine learning', method: 'bm25', k: 10,
-        candidates: 30, rerank: false, slop, titleOnly: false,
+        candidates: 30, rerank: false, diversity: null, slop, titleOnly: false,
         exactPhrase: false, mustInclude: '', mustExclude: '',
       },
     });
@@ -58,5 +58,18 @@ test('drops proximity for dense search, which does not use BM25', () => {
   assert.equal(dense.value.slop, null);
   for (const method of ['bm25', 'hybrid']) {
     assert.equal(validateSearchPayload({ ...validPayload, method, slop: 3 }).value.slop, 3);
+  }
+});
+
+test('diversity is optional and must be between 0 and 1', () => {
+  for (const diversity of [undefined, null, '']) {
+    assert.equal(validateSearchPayload({ ...validPayload, diversity }).value.diversity, null);
+  }
+  assert.equal(validateSearchPayload({ ...validPayload, diversity: 0.4 }).value.diversity, 0.4);
+  for (const diversity of [-0.1, 1.5, 'lots']) {
+    assert.equal(
+      validateSearchPayload({ ...validPayload, diversity }).error,
+      'Diversity must be a number from 0 to 1',
+    );
   }
 });

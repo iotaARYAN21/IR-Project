@@ -44,6 +44,7 @@ while True:
             rerank=request["rerank"],
             candidates=request["candidates"],
             slop=request.get("slop"),
+            diversity=request.get("diversity"),
             title_only=request.get("titleOnly", False),
             exact_phrase=request.get("exactPhrase", False),
             must_include=request.get("mustInclude") or None,

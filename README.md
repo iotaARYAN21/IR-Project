@@ -358,7 +358,7 @@ positions of each other get a higher score (0 means next to each other, in
 order). Other passages are still returned, so it only changes the ranking.
 It is off by default, which keeps the evaluated BM25 unchanged. In interactive
 mode, type a query or use `:method bm25|dense|hybrid`, `:slop off|N`,
-`:rerank on|off`, `:k N`,
+`:diversity off|X`, `:rerank on|off`, `:k N`,
 `:candidates N`, `:settings`, `:help` or `:quit`. Each answer lists the results
 with a short snippet and the time spent in every stage. Components load the
 first time they are used: the dense vectors take about 4 GB of RAM and some
@@ -366,11 +366,26 @@ seconds to load, and the reranker model is downloaded on first use. Reranking
 30 candidates on a CPU takes roughly half a second, and 100 candidates close to
 two seconds.
 
+### Diverse results (MMR)
+
+`--diversity X` (0 to 1) re-orders the candidates with Maximal Marginal Relevance
+so that near-duplicate passages are pushed down. Each pick maximises
+`(1 - X) * relevance - X * similarity to the results already picked`, where the
+similarity is the cosine of the passage vectors and relevance is the current
+score, min-max scaled (the CrossEncoder's score if reranking is on). It works
+with every method but needs the document vectors, so BM25 results also load the
+4 GB of vectors on first use. The candidate pool is `--candidates` (default 30).
+It is off by default and only used by live search, so the evaluated results are
+unchanged. On the tuned hybrid with a pool of 30, the mean similarity between
+the top 10 passages falls from 0.61 (off) to 0.57 at 0.4 and 0.52 at 0.6, at the
+cost of NDCG@10 going from 0.478 to 0.468 and 0.442. NQ has one relevant passage
+per query, so diversity can only lower the accuracy scores here.
+
 ## Web search UI
 
 The browser UI uses the same search pipeline. It supports method selection,
-reranking, method comparison and the proximity boost, which applies to BM25 and
-hybrid. When BM25 is selected,
+reranking, method comparison, a diversity (MMR) setting, and the proximity
+boost, which applies to BM25 and hybrid. When BM25 is selected,
 expand **Advanced search** to request an exact phrase, require or exclude terms,
 or search titles only. Title only applies to the main query; the required and
 excluded terms are checked in the title and the text. These BM25 options apply to the BM25 result column when

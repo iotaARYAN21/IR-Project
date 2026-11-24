@@ -23,6 +23,12 @@ function validateSearchPayload(payload) {
   if (slopGiven && (!Number.isSafeInteger(slop) || slop < 0 || slop > MAX_SLOP)) {
     return { error: `Proximity distance must be a whole number from 0 to ${MAX_SLOP}` };
   }
+  // Diversity (MMR) is optional: missing, null or blank leaves it off.
+  const diversityGiven = payload.diversity !== undefined && payload.diversity !== null && payload.diversity !== '';
+  const diversity = diversityGiven ? Number(payload.diversity) : null;
+  if (diversityGiven && (!Number.isFinite(diversity) || diversity < 0 || diversity > 1)) {
+    return { error: 'Diversity must be a number from 0 to 1' };
+  }
   for (const field of ['mustInclude', 'mustExclude']) {
     if (payload[field] !== undefined && typeof payload[field] !== 'string') {
       return { error: `${field} must be text` };
@@ -39,6 +45,7 @@ function validateSearchPayload(payload) {
       candidates,
       rerank: Boolean(payload.rerank),
       // Proximity is a BM25 feature: dense search never uses it.
+      diversity,
       slop: ['bm25', 'hybrid'].includes(payload.method) ? slop : null,
       titleOnly: Boolean(payload.titleOnly),
       exactPhrase: Boolean(payload.exactPhrase),

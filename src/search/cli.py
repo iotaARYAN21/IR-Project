@@ -23,6 +23,7 @@ SCORE_LABELS = {
 HELP = """Type a query and press Enter. Commands:
   :method bm25|dense|hybrid   choose the retrieval method
   :slop off|N                 BM25 proximity boost: words within N positions (0-100)
+  :diversity off|X            reduce near-duplicate results (MMR), X from 0 to 1
   :rerank on|off              rescore the best candidates with the CrossEncoder
   :k N                        number of results to show
   :candidates N               documents the reranker rescores
@@ -38,6 +39,7 @@ class Settings:
     rerank: bool = False
     candidates: int = 30
     slop: int | None = None
+    diversity: float | None = None
 
 
 def apply_command(settings: Settings, line: str) -> str:
@@ -77,6 +79,18 @@ def apply_command(settings: Settings, line: str) -> str:
             raise ValueError(f"Usage: :slop off|N (a whole number from 0 to {MAX_SLOP})")
         settings.slop = int(args[0])
         return describe(settings)
+    if name == "diversity":
+        if len(args) == 1 and args[0] == "off":
+            settings.diversity = None
+            return describe(settings)
+        try:
+            value = float(args[0]) if len(args) == 1 else None
+        except ValueError:
+            value = None
+        if value is None or not 0 <= value <= 1:
+            raise ValueError("Usage: :diversity off|X (a number from 0 to 1)")
+        settings.diversity = value
+        return describe(settings)
     raise ValueError(f"Unknown command ':{name}'. Type :help.")
 
 
@@ -85,7 +99,8 @@ def describe(settings: Settings) -> str:
     proximity = "off" if settings.slop is None else f"within {settings.slop}"
     return (
         f"method={settings.method}, rerank={rerank}, results={settings.k}, "
-        f"proximity={proximity}"
+        f"proximity={proximity}, "
+        f"diversity={'off' if settings.diversity is None else settings.diversity}"
     )
 
 
@@ -181,11 +196,15 @@ def build_engine(args) -> SearchEngine:
     def fetch(ids):
         return fetch_documents(client.get(), ids, args.index)
 
+    def similarity(ids):
+        vectors = dense.get()[0].vectors_for(ids)
+        return vectors @ vectors.T
+
     def rerank(query, texts):
         from src.search.rerank import rerank_scores
         return rerank_scores(reranker.get(), query, texts)
 
-    return SearchEngine(bm25_search, dense_search, fetch, rerank)
+    return SearchEngine(bm25_search, dense_search, fetch, rerank, similarity)
 
 
 def run_query(engine: SearchEngine, settings: Settings, query: str, args) -> None:
@@ -196,6 +215,7 @@ def run_query(engine: SearchEngine, settings: Settings, query: str, args) -> Non
         rerank=settings.rerank,
         candidates=settings.candidates,
         slop=settings.slop,
+        diversity=settings.diversity,
         depth=args.depth,
         rrf_k=args.rrf_k,
         weights=(args.bm25_weight, args.dense_weight),
@@ -217,6 +237,12 @@ def main() -> None:
         default=None,
         help="Boost BM25 passages whose query words are within this many "
         "positions (0 to 100). Default: off.",
+    )
+    parser.add_argument(
+        "--diversity",
+        type=float,
+        default=None,
+        help="Reduce near-duplicate results with MMR: 0 (off) to 1 (most diverse).",
     )
     parser.add_argument("--rerank", action="store_true", help="Rerank with the CrossEncoder.")
     parser.add_argument("--k", type=int, default=10, help="Results to show (default: 10).")
@@ -259,7 +285,12 @@ def main() -> None:
     if args.slop is not None and not 0 <= args.slop <= MAX_SLOP:
         parser.error(f"--slop must be between 0 and {MAX_SLOP}")
 
-    settings = Settings(args.method, args.k, args.rerank, args.candidates, args.slop)
+    if args.diversity is not None and not 0 <= args.diversity <= 1:
+        parser.error("--diversity must be between 0 and 1")
+
+    settings = Settings(
+        args.method, args.k, args.rerank, args.candidates, args.slop, args.diversity
+    )
     engine = build_engine(args)
 
     if args.query is not None:

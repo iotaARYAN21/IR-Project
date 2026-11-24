@@ -56,6 +56,13 @@ class DenseIndexTests(unittest.TestCase):
         index = DenseIndex(self.doc_ids[:4], self.vectors[:4], chunk_rows=3)
         self.assertEqual(len(index.search(self.queries[0], k=50)), 4)
 
+    def test_vectors_for_returns_rows_in_the_requested_order(self):
+        index = DenseIndex(self.doc_ids, self.vectors)
+        found = index.vectors_for(["doc7", "doc2"])
+        np.testing.assert_array_equal(found, self.vectors[[7, 2]])
+        with self.assertRaises(KeyError):
+            index.vectors_for(["missing"])
+
     def test_rejects_bad_input(self):
         index = DenseIndex(self.doc_ids, self.vectors)
         with self.assertRaises(ValueError):

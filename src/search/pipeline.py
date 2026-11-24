@@ -9,6 +9,7 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
+from src.search.mmr import mmr_order
 from src.search.hybrid import (
     HYBRID_DENSE_WEIGHT,
     HYBRID_RRF_K,
@@ -23,6 +24,7 @@ MAX_SLOP = 100
 SearchFn = Callable[[str, int], list[tuple[str, float]]]
 FetchFn = Callable[[Sequence[str]], dict[str, dict]]
 RerankFn = Callable[[str, Sequence[str]], list[float]]
+SimilarityFn = Callable[[Sequence[str]], Sequence[Sequence[float]]]
 
 
 @dataclass
@@ -49,11 +51,13 @@ class SearchEngine:
         dense: SearchFn | None = None,
         fetch: FetchFn | None = None,
         rerank: RerankFn | None = None,
+        similarity: SimilarityFn | None = None,
     ):
         self._bm25 = bm25
         self._dense = dense
         self._fetch = fetch
         self._rerank = rerank
+        self._similarity = similarity
 
     def search(
         self,
@@ -64,6 +68,7 @@ class SearchEngine:
         candidates: int = 30,
         depth: int = 100,
         slop: int | None = None,
+        diversity: float | None = None,
         title_only: bool = False,
         must_include: str | None = None,
         must_exclude: str | None = None,
@@ -76,7 +81,9 @@ class SearchEngine:
         With rerank=True the best `candidates` documents from the chosen
         method are rescored by the CrossEncoder and the top k of those are
         returned. For hybrid search, `depth` documents are taken from each of
-        BM25 and dense search before fusing. `slop` turns on the proximity boost
+        BM25 and dense search before fusing. `diversity` (0 to 1) re-orders the
+        candidates with MMR to reduce near-duplicate results; None or 0 is off.
+        `slop` turns on the proximity boost
         in BM25 (also in the BM25 half of hybrid search); None leaves it off.
         """
         if method not in METHODS:
@@ -85,6 +92,8 @@ class SearchEngine:
             raise ValueError("k, candidates and depth must be at least 1")
         if slop is not None and not 0 <= slop <= MAX_SLOP:
             raise ValueError(f"slop must be between 0 and {MAX_SLOP}")
+        if diversity is not None and not 0 <= diversity <= 1:
+            raise ValueError("diversity must be between 0 and 1")
 
         timings: dict[str, float] = {}
         started = time.perf_counter()
@@ -100,7 +109,7 @@ class SearchEngine:
         if not query.strip():
             return SearchResponse(query, method, rerank, [], timings)
 
-        pool = max(k, candidates) if rerank else k
+        pool = max(k, candidates) if rerank or diversity else k
         if method == "bm25":
             options = {
                 "title_only": title_only,
@@ -155,6 +164,24 @@ class SearchEngine:
                 for (doc_id, _, doc), new_score in zip(entries, new_scores)
             ]
             entries.sort(key=lambda entry: -entry[1])
+
+        if diversity and len(entries) > 1:
+            # MMR picks from the whole candidate pool, using the current scores
+            # (the CrossEncoder's if reranked) as relevance.
+            similarity = timed(
+                "similarity",
+                self._require(self._similarity, "document similarity"),
+                [doc_id for doc_id, _, _ in entries],
+            )
+            order = timed(
+                "diversify",
+                mmr_order,
+                [score for _, score, _ in entries],
+                similarity,
+                k,
+                diversity,
+            )
+            entries = [entries[i] for i in order]
 
         hits = [
             Hit(doc_id, doc["title"], doc["text"], score)

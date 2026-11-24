@@ -49,6 +49,11 @@
             <input id="candidates" type="number" min="1" max="1000" step="1" value="30">
           </label>
 
+          <label>
+            Diversity
+            <input id="diversity" type="number" min="0" max="1" step="0.1" placeholder="Off" title="Leave empty for off. 0 to 1: higher spreads the results out more by pushing down near-duplicates (MMR).">
+          </label>
+
           <label class="switch-label">
             <input id="rerank" type="checkbox">
             <span>Rerank</span>

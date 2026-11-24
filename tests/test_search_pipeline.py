@@ -19,7 +19,7 @@ DOCS = {
 }
 
 
-def make_engine(rerank=None):
+def make_engine(rerank=None, similarity=None):
     calls = {"bm25": [], "dense": [], "fetch": []}
 
     def bm25(query, limit, **options):
@@ -35,7 +35,7 @@ def make_engine(rerank=None):
         calls["fetch"].append(list(ids))
         return {doc_id: DOCS[doc_id] for doc_id in ids if doc_id in DOCS}
 
-    return SearchEngine(bm25, dense, fetch, rerank), calls
+    return SearchEngine(bm25, dense, fetch, rerank, similarity), calls
 
 
 class SearchEngineTests(unittest.TestCase):
@@ -141,6 +141,36 @@ class SearchEngineTests(unittest.TestCase):
         self.assertEqual(calls["bm25_options"], [{"proximity_slop": 3}])
         engine.search("q", method="dense", k=2, slop=3)
         self.assertEqual(len(calls["bm25_options"]), 1)  # dense ignores it
+
+    def test_diversity_reorders_with_mmr_and_reports_timings(self):
+        # a and b are near-duplicates, c is different.
+        close = {("a", "b"): 0.99}
+
+        def similarity(ids):
+            return [
+                [1.0 if x == y else close.get((x, y), close.get((y, x), 0.0)) for y in ids]
+                for x in ids
+            ]
+
+        engine, _ = make_engine(similarity=similarity)
+        plain = engine.search("q", method="bm25", k=3, candidates=4)
+        diverse = engine.search("q", method="bm25", k=3, candidates=4, diversity=0.6)
+        self.assertEqual([h.doc_id for h in plain.hits], ["a", "b", "c"])
+        self.assertEqual([h.doc_id for h in diverse.hits], ["a", "c", "d"])
+        self.assertIn("diversify", diverse.timings_ms)
+        self.assertNotIn("diversify", plain.timings_ms)
+
+    def test_diversity_draws_a_candidate_pool_larger_than_k(self):
+        engine, calls = make_engine(similarity=lambda ids: [[1.0] * len(ids)] * len(ids))
+        engine.search("q", method="bm25", k=2, candidates=4, diversity=0.5)
+        self.assertEqual(calls["bm25"], [4])
+
+    def test_diversity_needs_a_similarity_function_and_a_valid_value(self):
+        engine, _ = make_engine()
+        with self.assertRaises(RuntimeError):
+            engine.search("q", method="bm25", diversity=0.5)
+        with self.assertRaises(ValueError):
+            engine.search("q", method="bm25", diversity=1.5)
 
     def test_proximity_is_no_longer_a_separate_method(self):
         engine, _ = make_engine()
@@ -259,12 +289,16 @@ class CommandTests(unittest.TestCase):
         )
         apply_command(settings, ":slop off")
         self.assertIsNone(settings.slop)
+        apply_command(settings, ":diversity 0.3")
+        self.assertEqual(settings.diversity, 0.3)
+        apply_command(settings, ":diversity off")
+        self.assertIsNone(settings.diversity)
         apply_command(settings, ":rerank off")
         self.assertFalse(settings.rerank)
 
     def test_bad_commands_raise_and_leave_settings_alone(self):
         settings = Settings()
-        for line in (":method nope", ":rerank maybe", ":k 0", ":k abc", ":slop -1", ":slop 101", ":slop abc", ":bogus", ":"):
+        for line in (":method nope", ":rerank maybe", ":k 0", ":k abc", ":slop -1", ":slop 101", ":diversity 2", ":diversity abc", ":diversity", ":slop abc", ":bogus", ":"):
             with self.subTest(line=line):
                 with self.assertRaises(ValueError):
                     apply_command(settings, line)
