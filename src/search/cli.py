@@ -196,15 +196,11 @@ def build_engine(args) -> SearchEngine:
     def fetch(ids):
         return fetch_documents(client.get(), ids, args.index)
 
-    def similarity(ids):
-        vectors = dense.get()[0].vectors_for(ids)
-        return vectors @ vectors.T
-
     def rerank(query, texts):
         from src.search.rerank import rerank_scores
         return rerank_scores(reranker.get(), query, texts)
 
-    return SearchEngine(bm25_search, dense_search, fetch, rerank, similarity)
+    return SearchEngine(bm25_search, dense_search, fetch, rerank)
 
 
 def run_query(engine: SearchEngine, settings: Settings, query: str, args) -> None:

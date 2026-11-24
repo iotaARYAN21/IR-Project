@@ -370,16 +370,33 @@ two seconds.
 
 `--diversity X` (0 to 1) re-orders the candidates with Maximal Marginal Relevance
 so that near-duplicate passages are pushed down. Each pick maximises
-`(1 - X) * relevance - X * similarity to the results already picked`, where the
-similarity is the cosine of the passage vectors and relevance is the current
-score, min-max scaled (the CrossEncoder's score if reranking is on). It works
-with every method but needs the document vectors, so BM25 results also load the
-4 GB of vectors on first use. The candidate pool is `--candidates` (default 30).
-It is off by default and only used by live search, so the evaluated results are
-unchanged. On the tuned hybrid with a pool of 30, the mean similarity between
-the top 10 passages falls from 0.61 (off) to 0.57 at 0.4 and 0.52 at 0.6, at the
-cost of NDCG@10 going from 0.478 to 0.468 and 0.442. NQ has one relevant passage
-per query, so diversity can only lower the accuracy scores here.
+`(1 - X) * relevance - X * similarity to the results already picked`, where
+relevance is the current score, min-max scaled (the CrossEncoder's score if
+reranking is on). Two passages count as similar when:
+
+- they have the **same title**, meaning they come from the same Wikipedia
+  article (similarity 1), or
+- otherwise, by the **Jaccard similarity** of their words: shared words divided
+  by all words in either passage, ignoring case and very common words.
+
+This needs no vectors and works with every method. The candidate pool is
+`--candidates` (default 30). It is off by default and only used by live search,
+so the evaluated results are unchanged.
+
+Without it, the tuned hybrid's top 10 holds only 3.8 different articles on
+average, because several passages of one article rank together. With a pool of
+30 the number of distinct articles and the accuracy change like this (all 3,452
+queries):
+
+| Diversity | Distinct articles in top 10 | NDCG@10 | Recall@10 |
+| --- | --- | --- | --- |
+| off | 3.76 | 0.4779 | 0.6829 |
+| 0.2 | 4.80 | 0.4691 | 0.6705 |
+| 0.4 | 6.52 | 0.4303 | 0.6111 |
+| 0.6 | 7.23 | 0.3872 | 0.5345 |
+
+NQ has one relevant passage per query, so diversity can only lower the accuracy
+scores here. The similarity step takes about 2 ms per query.
 
 ## Web search UI
 

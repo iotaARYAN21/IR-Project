@@ -1,6 +1,6 @@
 import unittest
 
-from src.search.mmr import mmr_order, normalize
+from src.search.mmr import jaccard, mmr_order, normalize, passage_similarity, word_set
 
 # Candidates 0 and 1 are near-duplicates; 2 is different but a bit less relevant.
 RELEVANCE = [1.0, 0.9, 0.7]
@@ -17,6 +17,43 @@ class NormalizeTests(unittest.TestCase):
 
     def test_equal_scores_all_become_one(self):
         self.assertEqual(normalize([3.0, 3.0]), [1.0, 1.0])
+
+
+class SimilarityTests(unittest.TestCase):
+    def test_word_set_lowercases_and_drops_common_words(self):
+        self.assertEqual(word_set("The Cat, and the HAT!"), frozenset({"cat", "hat"}))
+
+    def test_jaccard_is_shared_over_total(self):
+        self.assertEqual(jaccard(frozenset("abc"), frozenset("bcd")), 0.5)
+        self.assertEqual(jaccard(frozenset(), frozenset()), 0.0)
+        self.assertEqual(jaccard(frozenset("ab"), frozenset("ab")), 1.0)
+
+    def test_same_title_counts_as_a_repeat_whatever_the_text(self):
+        matrix = passage_similarity(
+            ["Nvidia", " nvidia ", "Apple"],
+            ["graphics cards", "founded in 1993", "fruit trees"],
+        )
+        self.assertEqual(matrix[0][1], 1.0)
+        self.assertEqual(matrix[0][2], 0.0)
+
+    def test_different_titles_use_word_overlap(self):
+        matrix = passage_similarity(
+            ["GPU", "Graphics card"],
+            ["a chip for rendering graphics", "a chip for rendering graphics fast"],
+        )
+        self.assertEqual(matrix[0][1], 0.5)  # 3 shared words of 6
+        self.assertLess(matrix[0][1], 1.0)
+
+    def test_matrix_is_symmetric_with_ones_on_the_diagonal(self):
+        matrix = passage_similarity(["a", "b", "c"], ["x y", "y z", "z w"])
+        for i in range(3):
+            self.assertEqual(matrix[i][i], 1.0)
+            for j in range(3):
+                self.assertEqual(matrix[i][j], matrix[j][i])
+
+    def test_rejects_mismatched_lengths(self):
+        with self.assertRaises(ValueError):
+            passage_similarity(["a"], [])
 
 
 class MmrTests(unittest.TestCase):

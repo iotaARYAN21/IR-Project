@@ -83,7 +83,6 @@ class DenseIndex:
         self.doc_ids = doc_ids
         self.vectors = vectors
         self.chunk_rows = chunk_rows
-        self._row_of: dict[str, int] | None = None
 
     @classmethod
     def from_directory(cls, directory: Path) -> "DenseIndex":
@@ -92,16 +91,6 @@ class DenseIndex:
 
     def __len__(self) -> int:
         return len(self.doc_ids)
-
-    def vectors_for(self, doc_ids) -> np.ndarray:
-        """Vectors of the given documents, one row each, in the given order."""
-        if self._row_of is None:  # built on first use: about a second for NQ
-            self._row_of = {doc_id: row for row, doc_id in enumerate(self.doc_ids)}
-        try:
-            rows = [self._row_of[doc_id] for doc_id in doc_ids]
-        except KeyError as exc:
-            raise KeyError(f"No vector for document {exc.args[0]}") from exc
-        return self.vectors[rows]
 
     def search_vectors(
         self,

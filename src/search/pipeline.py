@@ -9,7 +9,7 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
-from src.search.mmr import mmr_order
+from src.search.mmr import mmr_order, passage_similarity
 from src.search.hybrid import (
     HYBRID_DENSE_WEIGHT,
     HYBRID_RRF_K,
@@ -24,7 +24,6 @@ MAX_SLOP = 100
 SearchFn = Callable[[str, int], list[tuple[str, float]]]
 FetchFn = Callable[[Sequence[str]], dict[str, dict]]
 RerankFn = Callable[[str, Sequence[str]], list[float]]
-SimilarityFn = Callable[[Sequence[str]], Sequence[Sequence[float]]]
 
 
 @dataclass
@@ -51,13 +50,11 @@ class SearchEngine:
         dense: SearchFn | None = None,
         fetch: FetchFn | None = None,
         rerank: RerankFn | None = None,
-        similarity: SimilarityFn | None = None,
     ):
         self._bm25 = bm25
         self._dense = dense
         self._fetch = fetch
         self._rerank = rerank
-        self._similarity = similarity
 
     def search(
         self,
@@ -170,8 +167,9 @@ class SearchEngine:
             # (the CrossEncoder's if reranked) as relevance.
             similarity = timed(
                 "similarity",
-                self._require(self._similarity, "document similarity"),
-                [doc_id for doc_id, _, _ in entries],
+                passage_similarity,
+                [doc["title"] for _, _, doc in entries],
+                [doc["text"] for _, _, doc in entries],
             )
             order = timed(
                 "diversify",

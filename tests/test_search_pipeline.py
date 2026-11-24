@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from src.search.cli import Settings, apply_command, format_response, format_timings
 from src.search.documents import fetch_documents, load_corpus_texts
@@ -19,7 +20,7 @@ DOCS = {
 }
 
 
-def make_engine(rerank=None, similarity=None):
+def make_engine(rerank=None):
     calls = {"bm25": [], "dense": [], "fetch": []}
 
     def bm25(query, limit, **options):
@@ -35,7 +36,7 @@ def make_engine(rerank=None, similarity=None):
         calls["fetch"].append(list(ids))
         return {doc_id: DOCS[doc_id] for doc_id in ids if doc_id in DOCS}
 
-    return SearchEngine(bm25, dense, fetch, rerank, similarity), calls
+    return SearchEngine(bm25, dense, fetch, rerank), calls
 
 
 class SearchEngineTests(unittest.TestCase):
@@ -142,33 +143,26 @@ class SearchEngineTests(unittest.TestCase):
         engine.search("q", method="dense", k=2, slop=3)
         self.assertEqual(len(calls["bm25_options"]), 1)  # dense ignores it
 
-    def test_diversity_reorders_with_mmr_and_reports_timings(self):
-        # a and b are near-duplicates, c is different.
-        close = {("a", "b"): 0.99}
-
-        def similarity(ids):
-            return [
-                [1.0 if x == y else close.get((x, y), close.get((y, x), 0.0)) for y in ids]
-                for x in ids
-            ]
-
-        engine, _ = make_engine(similarity=similarity)
-        plain = engine.search("q", method="bm25", k=3, candidates=4)
-        diverse = engine.search("q", method="bm25", k=3, candidates=4, diversity=0.6)
+    def test_diversity_pushes_down_passages_from_the_same_article(self):
+        docs = {
+            "a": {"title": "Nvidia", "text": "graphics chips"},
+            "b": {"title": "Nvidia", "text": "founded in 1993"},
+            "c": {"title": "Apple", "text": "fruit trees orchard"},
+            "d": {"title": "Linux", "text": "operating system kernel"},
+        }
+        with mock.patch.dict(DOCS, docs):
+            engine, calls = make_engine()
+            plain = engine.search("q", method="bm25", k=3, candidates=4)
+            diverse = engine.search("q", method="bm25", k=3, candidates=4, diversity=0.6)
         self.assertEqual([h.doc_id for h in plain.hits], ["a", "b", "c"])
         self.assertEqual([h.doc_id for h in diverse.hits], ["a", "c", "d"])
         self.assertIn("diversify", diverse.timings_ms)
         self.assertNotIn("diversify", plain.timings_ms)
+        self.assertEqual(calls["bm25"], [3, 4])  # diversity widened the pool to 4
 
-    def test_diversity_draws_a_candidate_pool_larger_than_k(self):
-        engine, calls = make_engine(similarity=lambda ids: [[1.0] * len(ids)] * len(ids))
-        engine.search("q", method="bm25", k=2, candidates=4, diversity=0.5)
-        self.assertEqual(calls["bm25"], [4])
-
-    def test_diversity_needs_a_similarity_function_and_a_valid_value(self):
+    def test_diversity_needs_no_vectors_and_rejects_a_bad_value(self):
         engine, _ = make_engine()
-        with self.assertRaises(RuntimeError):
-            engine.search("q", method="bm25", diversity=0.5)
+        self.assertEqual(len(engine.search("q", method="bm25", k=2, diversity=0.5).hits), 2)
         with self.assertRaises(ValueError):
             engine.search("q", method="bm25", diversity=1.5)
 
