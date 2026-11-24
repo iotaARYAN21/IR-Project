@@ -115,7 +115,8 @@ body {
 }
 
 select,
-input[type="number"] {
+input[type="number"],
+input[type="text"] {
   height: 36px;
   min-width: 120px;
   border: 1px solid var(--line);
@@ -125,7 +126,43 @@ input[type="number"] {
   padding: 0 9px;
 }
 
-.compare-method-field[hidden] { display: none; }
+.method-group {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+}
+
+/* Takes up its space but is not shown, so the controls beside it stay put. */
+.slop-field.is-inactive { visibility: hidden; }
+
+/* Keep the hidden attribute working on elements that set their own display. */
+[hidden] { display: none !important; }
+
+.hint {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.advanced-search {
+  margin-top: 14px;
+  padding: 10px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.advanced-search summary {
+  cursor: pointer;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.advanced-controls label input[type="text"] { min-width: 220px; }
 
 .switch-label {
   height: 36px;

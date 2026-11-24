@@ -22,9 +22,8 @@ results using standard ranking metrics.
   exactly. See "Document embeddings" and "Dense (semantic) retrieval".
 - Added hybrid retrieval that fuses BM25 and dense results with reciprocal
   rank fusion (see "Hybrid retrieval").
-- Added a command-line search tool for BM25, dense, hybrid and proximity
-  retrieval, with optional reranking and per-stage timings (see "Live search").
-- Added a browser UI with proximity distance controls and BM25 Advanced Search
+- Added a command-line search tool for BM25, dense and hybrid retrieval, with optional reranking and per-stage timings (see "Live search").
+- Added a browser UI with a proximity boost for BM25 and BM25 Advanced Search
   options for exact phrases, required or excluded terms, and title-only search.
 - Added unit tests for the metrics, latency, fusion, dense search, encoder and
   search pipeline code.
@@ -101,8 +100,8 @@ Roughly in the order we plan to do it:
    Elasticsearch similarity (for example language-model Dirichlet scoring),
    which needs a second index.
 5. **Web UI improvements.** The UI now supports BM25, dense, hybrid and
-   proximity methods, reranking, side-by-side comparisons, highlighted terms,
-   proximity distance, and BM25 Advanced Search. Further work could add query
+   methods, reranking, side-by-side comparisons, highlighted terms, the
+   proximity boost, and BM25 Advanced Search. Further work could add query
    expansion, autocomplete and spelling correction ("Did you mean?"). The
    dense vectors take 4 GB of RAM, so memory use on the demo machine matters.
 6. **Search features:** query expansion, autocomplete, spelling correction
@@ -341,7 +340,7 @@ and distort the latency.
 ## Live search (command line)
 
 `src/search/cli.py` searches the passages interactively with BM25, dense,
-hybrid or proximity retrieval, with optional CrossEncoder reranking. It needs
+or hybrid retrieval, with optional CrossEncoder reranking. It needs
 Elasticsearch running (it supplies the passage text) and the same connection
 settings as the evaluators. Dense and hybrid search also need the document
 vectors.
@@ -350,12 +349,16 @@ vectors.
 python3 -m src.search.cli                                   # interactive
 python3 -m src.search.cli --method hybrid --query "who wrote hamlet"
 python3 -m src.search.cli --method bm25 --rerank --candidates 30 --k 5 --query "..."
-python3 -m src.search.cli --method proximity --slop 0 --query "climate change"
+python3 -m src.search.cli --method bm25 --slop 2 --query "climate change"
 ```
 
-For proximity search, `--slop` sets the phrase distance from 0 (exact phrase)
-to 20 (more flexible). The default is 2. In interactive mode, type a query or
-use `:method bm25|dense|hybrid|proximity`, `:slop N`, `:rerank on|off`, `:k N`,
+`--slop N` (0 to 20) turns on the **proximity boost** in BM25, and so also in the
+BM25 half of hybrid search: passages that contain the query words within N
+positions of each other get a higher score (0 means next to each other, in
+order). Other passages are still returned, so it only changes the ranking.
+It is off by default, which keeps the evaluated BM25 unchanged. In interactive
+mode, type a query or use `:method bm25|dense|hybrid`, `:slop off|N`,
+`:rerank on|off`, `:k N`,
 `:candidates N`, `:settings`, `:help` or `:quit`. Each answer lists the results
 with a short snippet and the time spent in every stage. Components load the
 first time they are used: the dense vectors take about 4 GB of RAM and some
@@ -366,7 +369,8 @@ two seconds.
 ## Web search UI
 
 The browser UI uses the same search pipeline. It supports method selection,
-reranking, method comparison and proximity distance. When BM25 is selected,
+reranking, method comparison and the proximity boost, which applies to BM25 and
+hybrid. When BM25 is selected,
 expand **Advanced search** to request an exact phrase, require or exclude terms,
 or search titles only. These BM25 options apply to the BM25 result column when
 comparing methods. Follow [ui.md](ui.md) to start the UI and configure

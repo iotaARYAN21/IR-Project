@@ -15,12 +15,11 @@ from src.search.hybrid import (
     reciprocal_rank_fusion,
 )
 
-METHODS = ("bm25", "dense", "hybrid","proximity")
+METHODS = ("bm25", "dense", "hybrid")
 
 SearchFn = Callable[[str, int], list[tuple[str, float]]]
 FetchFn = Callable[[Sequence[str]], dict[str, dict]]
 RerankFn = Callable[[str, Sequence[str]], list[float]]
-ProximityFn = Callable[[str, int, int], list[tuple[str, float]]]
 
 
 @dataclass
@@ -47,13 +46,11 @@ class SearchEngine:
         dense: SearchFn | None = None,
         fetch: FetchFn | None = None,
         rerank: RerankFn | None = None,
-        proximity: ProximityFn | None = None,
     ):
         self._bm25 = bm25
         self._dense = dense
         self._fetch = fetch
         self._rerank = rerank
-        self._proximity = proximity
 
     def search(
         self,
@@ -63,7 +60,7 @@ class SearchEngine:
         rerank: bool = False,
         candidates: int = 30,
         depth: int = 100,
-        slop: int = 2,
+        slop: int | None = None,
         title_only: bool = False,
         must_include: str | None = None,
         must_exclude: str | None = None,
@@ -76,21 +73,22 @@ class SearchEngine:
         With rerank=True the best `candidates` documents from the chosen
         method are rescored by the CrossEncoder and the top k of those are
         returned. For hybrid search, `depth` documents are taken from each of
-        BM25 and dense search before fusing.
+        BM25 and dense search before fusing. `slop` turns on the proximity boost
+        in BM25 (also in the BM25 half of hybrid search); None leaves it off.
         """
         if method not in METHODS:
             raise ValueError(f"method must be one of {METHODS}, not {method!r}")
         if k < 1 or candidates < 1 or depth < 1:
             raise ValueError("k, candidates and depth must be at least 1")
-        if slop < 0 or slop > 20:
+        if slop is not None and not 0 <= slop <= 20:
             raise ValueError("slop must be between 0 and 20")
 
         timings: dict[str, float] = {}
         started = time.perf_counter()
 
-        def timed(name, function, *args):
+        def timed(name, function, *args, **kwargs):
             begin = time.perf_counter()
-            result = function(*args)
+            result = function(*args, **kwargs)
             timings[name] = (
                 timings.get(name, 0.0) + (time.perf_counter() - begin) * 1000
             )
@@ -101,18 +99,29 @@ class SearchEngine:
 
         pool = max(k, candidates) if rerank else k
         if method == "bm25":
-            bm25 = self._require(self._bm25, "BM25")
-            if title_only or must_include or must_exclude or exact_phrase:
-                ranked = timed("bm25", bm25, query, pool, title_only, must_include, must_exclude, exact_phrase)
-            else:
-                ranked = timed("bm25", bm25, query, pool)
+            options = {
+                "title_only": title_only,
+                "must_include": must_include,
+                "must_exclude": must_exclude,
+                "exact_phrase": exact_phrase,
+                "proximity_slop": slop,
+            }
+            # Pass only the options that are set, so a plain BM25 function works.
+            options = {
+                name: value
+                for name, value in options.items()
+                if value is not None and value is not False and value != ""
+            }
+            ranked = timed("bm25", self._require(self._bm25, "BM25"), query, pool, **options)
         elif method == "dense":
             ranked = timed("dense", self._require(self._dense, "dense"), query, pool)
-        elif method == "proximity":
-            ranked = timed("proximity",self._require(self._proximity,"proximity search"),query,pool,slop)
         else:
             bm25_hits = timed(
-                "bm25", self._require(self._bm25, "BM25"), query, max(depth, pool)
+                "bm25",
+                self._require(self._bm25, "BM25"),
+                query,
+                max(depth, pool),
+                **({} if slop is None else {"proximity_slop": slop}),
             )
             dense_hits = timed(
                 "dense", self._require(self._dense, "dense"), query, max(depth, pool)

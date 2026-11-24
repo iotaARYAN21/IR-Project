@@ -22,8 +22,9 @@ DOCS = {
 def make_engine(rerank=None):
     calls = {"bm25": [], "dense": [], "fetch": []}
 
-    def bm25(query, limit):
+    def bm25(query, limit, **options):
         calls["bm25"].append(limit)
+        calls.setdefault("bm25_options", []).append(options)
         return [("a", 9.0), ("b", 8.0), ("c", 7.0), ("d", 6.0)][:limit]
 
     def dense(query, limit):
@@ -33,12 +34,8 @@ def make_engine(rerank=None):
     def fetch(ids):
         calls["fetch"].append(list(ids))
         return {doc_id: DOCS[doc_id] for doc_id in ids if doc_id in DOCS}
-    
-    def proximity(query, limit, slop):
-        calls.setdefault("proximity", []).append(slop)
-        return [("b", 10.0), ("a", 8.0)][:limit]
-    
-    return SearchEngine(bm25, dense, fetch, rerank,proximity), calls
+
+    return SearchEngine(bm25, dense, fetch, rerank), calls
 
 
 class SearchEngineTests(unittest.TestCase):
@@ -132,23 +129,30 @@ class SearchEngineTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             engine.search("q", method="bm25", rerank=True)  # no reranker configured
 
-    def test_proximity_returns_proximity_results(self):
+    def test_proximity_is_passed_to_bm25_only_when_set(self):
         engine, calls = make_engine()
+        engine.search("q", method="bm25", k=2)
+        engine.search("q", method="bm25", k=2, slop=0)
+        self.assertEqual(calls["bm25_options"], [{}, {"proximity_slop": 0}])
 
-        response = engine.search(
-            "machine learning",
-            method="proximity",
-            k=2,
-            slop=3,
-        )
+    def test_proximity_applies_to_the_bm25_half_of_hybrid(self):
+        engine, calls = make_engine()
+        engine.search("q", method="hybrid", k=2, slop=3)
+        self.assertEqual(calls["bm25_options"], [{"proximity_slop": 3}])
+        engine.search("q", method="dense", k=2, slop=3)
+        self.assertEqual(len(calls["bm25_options"]), 1)  # dense ignores it
 
-        self.assertEqual(
-            [h.doc_id for h in response.hits],
-            ["b", "a"],
-        )
+    def test_proximity_is_no_longer_a_separate_method(self):
+        engine, _ = make_engine()
+        with self.assertRaises(ValueError):
+            engine.search("q", method="proximity")
 
-        self.assertEqual(calls["proximity"], [3])
-        self.assertIn("proximity", response.timings_ms)
+    def test_rejects_slop_out_of_range(self):
+        engine, _ = make_engine()
+        for slop in (-1, 21):
+            with self.assertRaises(ValueError):
+                engine.search("q", method="bm25", slop=slop)
+
 
 class FetchDocumentsTests(unittest.TestCase):
     class FakeClient:
@@ -253,6 +257,8 @@ class CommandTests(unittest.TestCase):
             (settings.method, settings.rerank, settings.k, settings.candidates, settings.slop),
             ("dense", True, 5, 20, 0),
         )
+        apply_command(settings, ":slop off")
+        self.assertIsNone(settings.slop)
         apply_command(settings, ":rerank off")
         self.assertFalse(settings.rerank)
 

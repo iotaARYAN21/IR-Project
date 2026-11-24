@@ -12,12 +12,16 @@ const status = document.querySelector('#status');
 const themeToggle = document.querySelector('#theme-toggle');
 const slopInput = document.querySelector('#slop');
 const slopField = document.querySelector('#slop-field');
+const compareSlopInput = document.querySelector('#compare-slop');
+const compareSlopField = document.querySelector('#compare-slop-field');
+const proximityHint = document.querySelector('#proximity-hint');
 const advancedSearch = document.querySelector('#advanced-search');
 const exactPhraseInput = document.querySelector('#exact-phrase');
 const titleOnlyInput = document.querySelector('#title-only');
 const mustIncludeInput = document.querySelector('#must-include');
 const mustExcludeInput = document.querySelector('#must-exclude');
-const methods = ['bm25', 'dense', 'hybrid', 'proximity'];
+const methods = ['bm25', 'dense', 'hybrid'];
+const proximityMethods = ['bm25', 'hybrid'];
 
 function updateCompareMethods() {
   const previous = compareMethodSelect.value;
@@ -61,7 +65,18 @@ function formatTiming(response) {
 }
 
 function updateSlopVisibility() {
-  slopField.hidden = methodSelect.value !== 'proximity';
+  // The selectors stay in the layout (invisible) so nothing else moves when the
+  // method changes.
+  const mainOn = proximityMethods.includes(methodSelect.value);
+  const compareOn = proximityMethods.includes(compareMethodSelect.value);
+  slopField.classList.toggle('is-inactive', !mainOn);
+  slopInput.disabled = !mainOn;
+  compareSlopField.classList.toggle('is-inactive', !compareOn);
+  compareSlopInput.disabled = !compareOn;
+  proximityHint.hidden = !(mainOn || (compareInput.checked && compareOn));
+  // Custom BM25 search applies to whichever column uses BM25.
+  const compared = compareInput.checked ? compareMethodSelect.value : null;
+  advancedSearch.hidden = ![methodSelect.value, compared].includes('bm25');
 }
 
 function renderColumn(response, query) {
@@ -73,7 +88,7 @@ function renderColumn(response, query) {
           <h3>${escapeHtml(hit.title || 'Untitled document')}</h3>
         </div>
         <p>${highlight(hit.text, query)}</p>
-        <div class="score">${response.reranked ? 'CrossEncoder' : response.method === 'dense' ? 'Cosine' : response.method === 'hybrid' ? 'RRF' : response.method==='proximity'? 'Proximity': 'BM25'}: ${Number(hit.score).toFixed(4)}</div>
+        <div class="score">${response.reranked ? 'CrossEncoder' : response.method === 'dense' ? 'Cosine' : response.method === 'hybrid' ? 'RRF' : 'BM25'}: ${Number(hit.score).toFixed(4)}</div>
       </article>`).join('')
     : '<div class="empty">No results.</div>';
 
@@ -87,7 +102,7 @@ function renderColumn(response, query) {
     </section>`;
 }
 
-async function searchOne(query, method) {
+async function searchOne(query, method, slopSelect) {
   const response = await fetch('/api/search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -97,7 +112,9 @@ async function searchOne(query, method) {
       k: Number(kInput.value),
       candidates: Number(candidatesInput.value),
       rerank: rerankInput.checked,
-      slop: Number(slopInput.value),
+      slop: proximityMethods.includes(method) && slopSelect.value !== ''
+        ? Number(slopSelect.value)
+        : null,
       exactPhrase: method === 'bm25' && exactPhraseInput.checked,
       titleOnly: method === 'bm25' && titleOnlyInput.checked,
       mustInclude: method === 'bm25' ? mustIncludeInput.value : '',
@@ -123,11 +140,12 @@ form.addEventListener('submit', async (event) => {
 
   try {
     const selected = methodSelect.value;
-    const selectedMethods = compareInput.checked
-      ? [selected, compareMethodSelect.value]
-      : [selected];
+    const searches = [[selected, slopInput]];
+    if (compareInput.checked) searches.push([compareMethodSelect.value, compareSlopInput]);
 
-    const responses = await Promise.all(selectedMethods.map((method) => searchOne(query, method)));
+    const responses = await Promise.all(
+      searches.map(([method, slopSelect]) => searchOne(query, method, slopSelect))
+    );
     results.style.setProperty('--columns', String(responses.length));
     results.innerHTML = responses.map((response) => renderColumn(response, query)).join('');
 
@@ -145,19 +163,17 @@ form.addEventListener('submit', async (event) => {
   }
 });
 
-methodSelect.addEventListener('change', updateCompareMethods);
+methodSelect.addEventListener('change', () => {
+  updateCompareMethods();
+  updateSlopVisibility();
+});
 compareInput.addEventListener('change', () => {
   compareMethodField.hidden = !compareInput.checked;
+  updateSlopVisibility();
 });
+compareMethodSelect.addEventListener('change', updateSlopVisibility);
 updateCompareMethods();
-
-methodSelect.addEventListener('change', updateSlopVisibility);
 updateSlopVisibility();
-function updateAdvancedSearchVisibility() {
-  advancedSearch.hidden = methodSelect.value !== 'bm25';
-}
-methodSelect.addEventListener('change', updateAdvancedSearchVisibility);
-updateAdvancedSearchVisibility();
 
 const savedTheme = localStorage.getItem('ir-theme');
 if (savedTheme) {

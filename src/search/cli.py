@@ -19,11 +19,10 @@ SCORE_LABELS = {
     ("bm25", False): "BM25 score",
     ("dense", False): "cosine similarity",
     ("hybrid", False): "RRF score",
-    ("proximity", False): "Proximity score",
 }
 HELP = """Type a query and press Enter. Commands:
-  :method bm25|dense|hybrid|proximity   choose the retrieval method
-  :slop N                     proximity distance (0-20; 0 is exact phrase)
+  :method bm25|dense|hybrid   choose the retrieval method
+  :slop off|N                 BM25 proximity boost: words within N positions (0-20)
   :rerank on|off              rescore the best candidates with the CrossEncoder
   :k N                        number of results to show
   :candidates N               documents the reranker rescores
@@ -38,7 +37,7 @@ class Settings:
     k: int = 10
     rerank: bool = False
     candidates: int = 30
-    slop: int = 2
+    slop: int | None = None
 
 
 def apply_command(settings: Settings, line: str) -> str:
@@ -71,8 +70,11 @@ def apply_command(settings: Settings, line: str) -> str:
         setattr(settings, name, int(args[0]))
         return describe(settings)
     if name == "slop":
+        if len(args) == 1 and args[0] == "off":
+            settings.slop = None
+            return describe(settings)
         if len(args) != 1 or not args[0].isdigit() or not 0 <= int(args[0]) <= 20:
-            raise ValueError("Usage: :slop N (a whole number from 0 to 20)")
+            raise ValueError("Usage: :slop off|N (a whole number from 0 to 20)")
         settings.slop = int(args[0])
         return describe(settings)
     raise ValueError(f"Unknown command ':{name}'. Type :help.")
@@ -80,7 +82,11 @@ def apply_command(settings: Settings, line: str) -> str:
 
 def describe(settings: Settings) -> str:
     rerank = f"on ({settings.candidates} candidates)" if settings.rerank else "off"
-    return f"method={settings.method}, rerank={rerank}, results={settings.k}, proximity distance={settings.slop}"
+    proximity = "off" if settings.slop is None else f"within {settings.slop}"
+    return (
+        f"method={settings.method}, rerank={rerank}, results={settings.k}, "
+        f"proximity={proximity}"
+    )
 
 
 def snippet(text: str, width: int = 240) -> str:
@@ -135,7 +141,7 @@ def build_engine(args) -> SearchEngine:
     """Create the engine. Elasticsearch, vectors and models load on first use."""
     from src.indexing.config import create_es_client
     from src.indexing.encode_corpus import DEFAULT_MODEL, EMBEDDINGS_ROOT
-    from src.search.bm25 import (search_with_scores,search_proximity_with_scores)
+    from src.search.bm25 import search_with_scores
     from src.search.documents import fetch_documents
 
     embeddings_dir = args.embeddings_dir or EMBEDDINGS_ROOT / DEFAULT_MODEL.split("/")[-1]
@@ -151,15 +157,21 @@ def build_engine(args) -> SearchEngine:
     dense = Lazy("dense index and query encoder", load_dense)
     reranker = Lazy("reranker model", load_reranker_model)
 
-    def bm25_search(query, limit, title_only=False, must_include=None, must_exclude=None, exact_phrase=False):
+    def bm25_search(
+        query,
+        limit,
+        title_only=False,
+        must_include=None,
+        must_exclude=None,
+        exact_phrase=False,
+        proximity_slop=None,
+    ):
         return search_with_scores(
             client.get(), query, limit, args.index,
             title_only=title_only, must_include=must_include,
             must_exclude=must_exclude, exact_phrase=exact_phrase,
+            proximity_slop=proximity_slop,
         )
-
-    def proximity_search(query, limit,slop):
-        return search_proximity_with_scores(client.get(),query,limit,slop=slop,index_name=args.index,)
 
     def dense_search(query, limit):
         from src.search.dense import encode_queries
@@ -173,7 +185,7 @@ def build_engine(args) -> SearchEngine:
         from src.search.rerank import rerank_scores
         return rerank_scores(reranker.get(), query, texts)
 
-    return SearchEngine(bm25=bm25_search,dense=dense_search,fetch=fetch,rerank=rerank,proximity=proximity_search,)
+    return SearchEngine(bm25_search, dense_search, fetch, rerank)
 
 
 def run_query(engine: SearchEngine, settings: Settings, query: str, args) -> None:
@@ -199,7 +211,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Search the NQ passages.")
     parser.add_argument("--query", help="Run this one query and exit.")
     parser.add_argument("--method", choices=METHODS, default="hybrid")
-    parser.add_argument("--slop", type=int, default=2, help="Proximity distance from 0 to 20 (default: 2).")
+    parser.add_argument(
+        "--slop",
+        type=int,
+        default=None,
+        help="Boost BM25 passages whose query words are within this many "
+        "positions (0 to 20). Default: off.",
+    )
     parser.add_argument("--rerank", action="store_true", help="Rerank with the CrossEncoder.")
     parser.add_argument("--k", type=int, default=10, help="Results to show (default: 10).")
     parser.add_argument(
@@ -238,7 +256,7 @@ def main() -> None:
     for name in ("k", "candidates", "depth"):
         if getattr(args, name) < 1:
             parser.error(f"--{name} must be at least 1")
-    if not 0 <= args.slop <= 20:
+    if args.slop is not None and not 0 <= args.slop <= 20:
         parser.error("--slop must be between 0 and 20")
 
     settings = Settings(args.method, args.k, args.rerank, args.candidates, args.slop)

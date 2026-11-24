@@ -17,7 +17,7 @@ python3 -m src.indexing.index_corpus --recreate
 ```
 
 ## 2. Set Elasticsearch connection variables
-
+Bu
 Linux/macOS:
 
 ```bash
