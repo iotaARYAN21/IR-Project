@@ -3,6 +3,17 @@ import unittest
 from src.search.bm25 import search_with_scores, suggest_titles
 
 
+def ALL_WORDS(text):
+    return {
+        "multi_match": {
+            "query": text,
+            "type": "cross_fields",
+            "operator": "and",
+            "fields": ["title^2", "text"],
+        }
+    }
+
+
 class ProximitySearchTests(unittest.TestCase):
     class FakeClient:
         def search(self, **kwargs):
@@ -57,6 +68,13 @@ class ProximitySearchTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             search_with_scores(self.FakeClient(), "q", proximity_slop=-1)
 
+    def test_must_include_and_exclude_need_all_their_words(self):
+        client = self.FakeClient()
+        search_with_scores(client, "q", must_include="climate policy", must_exclude="sports football")
+        query = client.request["query"]["bool"]
+        self.assertEqual(query["must"][1], ALL_WORDS("climate policy"))
+        self.assertEqual(query["must_not"], [ALL_WORDS("sports football")])
+
     def test_builds_custom_boolean_search(self):
         client = self.FakeClient()
         search_with_scores(
@@ -67,11 +85,11 @@ class ProximitySearchTests(unittest.TestCase):
             "bool": {
                 "must": [
                     {"match_phrase": {"title": "climate change"}},
-                    {"multi_match": {"query": "policy", "fields": ["title^2", "text"]}},
+                    ALL_WORDS("policy"),
                 ],
                 "should": [],
                 "must_not": [
-                    {"multi_match": {"query": "sports", "fields": ["title^2", "text"]}},
+                    ALL_WORDS("sports"),
                 ],
             }
         })

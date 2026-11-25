@@ -45,23 +45,21 @@ no GPU). The tables come from the saved `results/*.json` files;
 Recall@100 is the recall of the 100 candidates each system returns, which is
 the ceiling for the reranker. Mean latency of hybrid and reranked systems is the
 sum of their stage means. The last column is the NDCG difference from BM25 with
-a paired bootstrap p-value.
+a significance mark (`*`).
 
 | System | NDCG@10 | MRR@10 | Recall@10 | Recall@100 | Mean latency (ms) | NDCG@10 vs BM25 | Queries |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | BM25 | 0.2802 | 0.2547 | 0.3900 | 0.6355 | 15.0 | baseline | 3452 |
-| Dense | 0.4464 | 0.3930 | 0.6559 | 0.8874 | 324.8 | +0.1662* (p < 0.0010) | 3452 |
-| Hybrid, equal weights (RRF k = 60) | 0.4247 | 0.3752 | 0.6167 | 0.8788 | 339.9 | +0.1446* (p < 0.0010) | 3452 |
-| Hybrid, tuned (dense 1.5, k = 10) † | 0.4779 | 0.4265 | 0.6829 | 0.8858 | 339.9 | +0.1977* (p < 0.0010) | 3452 |
-| BM25 + reranker | 0.4726 | 0.4441 | 0.5950 | 0.6355 | 3479.8 | +0.1924* (p < 0.0010) | 3452 |
-| Equal-weight hybrid + reranker | 0.5737 | 0.5264 | 0.7649 | 0.8788 | 3795.4 | +0.2935* (p < 0.0010) | 3452 |
-| Tuned hybrid + reranker † | 0.5741 | 0.5269 | 0.7657 | 0.8858 | 3571.4 | +0.2939* (p < 0.0010) | 3452 |
-
-`*` = significant at p < 0.05 (paired bootstrap against BM25).
+| Dense | 0.4464 | 0.3930 | 0.6559 | 0.8874 | 324.8 | +0.1662 | 3452 |
+| Hybrid, equal weights (RRF k = 60) | 0.4247 | 0.3752 | 0.6167 | 0.8788 | 339.9 | +0.1446 | 3452 |
+| Hybrid, tuned (dense 1.5, k = 10) † | 0.4779 | 0.4265 | 0.6829 | 0.8858 | 339.9 | +0.1977 | 3452 |
+| BM25 + reranker | 0.4726 | 0.4441 | 0.5950 | 0.6355 | 3479.8 | +0.1924 | 3452 |
+| Equal-weight hybrid + reranker | 0.5737 | 0.5264 | 0.7649 | 0.8788 | 3795.4 | +0.2935 | 3452 |
+| Tuned hybrid + reranker † | 0.5741 | 0.5269 | 0.7657 | 0.8858 | 3571.4 | +0.2939 | 3452 |
 
 † Dense weight 1.5 (BM25 weight 1), RRF k 10, chosen on 1036 dev queries. The row covers all queries, including those dev queries, so it is slightly optimistic. On the 2416 held-out queries NDCG@10 is 0.4776, against 0.4276 for the equal-weight hybrid.
 
-The reranker erases the benefit of tuning the fusion. On the 2,416 held-out queries the tuned hybrid + reranker scores 0.5741 NDCG@10 and the equal-weight one 0.5735 (difference +0.0006, 95% CI -0.0012 to +0.0026, p = 0.53), although the tuned hybrid is clearly better before reranking (0.4776 against 0.4276). The CrossEncoder reorders the same top 100 documents, so fusion only matters through which documents reach it (Recall@100 0.886 against 0.879). The tuned hybrid + reranker also shows a lower mean rerank time (3.2 s against 3.5 s per query). The two runs were not made under identical conditions, so treat that difference with caution.
+The reranker erases the benefit of tuning the fusion. On the 2,416 held-out queries the tuned hybrid + reranker scores 0.5741 NDCG@10 and the equal-weight one 0.5735 (difference +0.0006, 95% CI -0.0012 to +0.0026, not significant), although the tuned hybrid is clearly better before reranking (0.4776 against 0.4276). The CrossEncoder reorders the same top 100 documents, so fusion only matters through which documents reach it (Recall@100 0.886 against 0.879). The tuned hybrid + reranker also shows a lower mean rerank time (3.2 s against 3.5 s per query). The two runs were not made under identical conditions, so treat that difference with caution.
 
 Latency by stage (per query):
 
@@ -408,8 +406,8 @@ The browser UI uses the same search pipeline. It supports method selection,
 reranking, method comparison, a diversity (MMR) setting, and the proximity
 boost, which applies to BM25 and hybrid. When BM25 is selected,
 expand **Advanced search** to request an exact phrase, require or exclude terms,
-or search titles only. Title only applies to the main query; the required and
-excluded terms are checked in the title and the text. These BM25 options apply to the BM25 result column when
+or search titles only. Title only applies to the main query. Required terms must all appear (each in
+the title or the text), and passages containing all the excluded words are left out. These BM25 options apply to the BM25 result column when
 comparing methods. Typing at least two characters in the search box shows
 article titles that start with them (autocomplete): the titles come from the
 exact-string `title.raw` field, are grouped, and are ranked by how many passages
