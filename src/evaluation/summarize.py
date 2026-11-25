@@ -26,6 +26,7 @@ SYSTEMS = (
     ("hybrid", "Hybrid, tuned (dense 1.5, k = 10) †"),
     ("bm25_rerank", "BM25 + reranker"),
     ("hybrid_equal_rerank", "Equal-weight hybrid + reranker"),
+    ("hybrid_rerank", "Tuned hybrid + reranker †"),
 )
 BASELINE = "bm25"
 POOL_DEPTH = 100
@@ -40,6 +41,7 @@ STAGES = (
     ("RRF fusion", "hybrid", "fusion"),
     ("Rerank top-100 of BM25", "bm25_rerank", "rerank"),
     ("Rerank top-100 of equal-weight hybrid", "hybrid_equal_rerank", "rerank"),
+    ("Rerank top-100 of tuned hybrid", "hybrid_rerank", "rerank"),
 )
 
 

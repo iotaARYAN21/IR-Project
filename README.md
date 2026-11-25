@@ -55,10 +55,13 @@ a paired bootstrap p-value.
 | Hybrid, tuned (dense 1.5, k = 10) † | 0.4779 | 0.4265 | 0.6829 | 0.8858 | 339.9 | +0.1977* (p < 0.0010) | 3452 |
 | BM25 + reranker | 0.4726 | 0.4441 | 0.5950 | 0.6355 | 3479.8 | +0.1924* (p < 0.0010) | 3452 |
 | Equal-weight hybrid + reranker | 0.5737 | 0.5264 | 0.7649 | 0.8788 | 3795.4 | +0.2935* (p < 0.0010) | 3452 |
+| Tuned hybrid + reranker † | 0.5741 | 0.5269 | 0.7657 | 0.8858 | 3571.4 | +0.2939* (p < 0.0010) | 3452 |
 
 `*` = significant at p < 0.05 (paired bootstrap against BM25).
 
 † Dense weight 1.5 (BM25 weight 1), RRF k 10, chosen on 1036 dev queries. The row covers all queries, including those dev queries, so it is slightly optimistic. On the 2416 held-out queries NDCG@10 is 0.4776, against 0.4276 for the equal-weight hybrid.
+
+The reranker erases the benefit of tuning the fusion. On the 2,416 held-out queries the tuned hybrid + reranker scores 0.5741 NDCG@10 and the equal-weight one 0.5735 (difference +0.0006, 95% CI -0.0012 to +0.0026, p = 0.53), although the tuned hybrid is clearly better before reranking (0.4776 against 0.4276). The CrossEncoder reorders the same top 100 documents, so fusion only matters through which documents reach it (Recall@100 0.886 against 0.879). The tuned hybrid + reranker also shows a lower mean rerank time (3.2 s against 3.5 s per query). The two runs were not made under identical conditions, so treat that difference with caution.
 
 Latency by stage (per query):
 
@@ -71,6 +74,7 @@ Latency by stage (per query):
 | RRF fusion | 0.0 | 0.0 | 0.1 |
 | Rerank top-100 of BM25 | 3464.8 | 3366.3 | 4803.0 |
 | Rerank top-100 of equal-weight hybrid | 3455.5 | 3357.7 | 4978.4 |
+| Rerank top-100 of tuned hybrid | 3231.5 | 3184.2 | 4360.0 |
 
 ### Tuning the hybrid without overfitting
 
@@ -92,9 +96,9 @@ Roughly in the order we plan to do it:
 2. **CrossEncoder score caching.** The BM25 and hybrid candidate lists overlap
    heavily, so cached scores would save most of the reranking time. Not done.
 3. **Hybrid defaults.** The tuned setting (dense weight 1.5, RRF k = 10) is now
-   the default in the evaluator, pipeline and CLI. The reranker was run on the
-   equal-weight hybrid (`hybrid_equal_rerank`); reranking the tuned hybrid is not
-   needed to compare fusion settings.
+   the default in the evaluator, pipeline and CLI. The reranker was run on both
+   the equal-weight hybrid (`hybrid_equal_rerank`) and the tuned hybrid
+   (`hybrid_rerank`); see the results above.
 4. **A retrieval method that does not use BM25**, combined with semantic
    search. The method is not chosen yet. The simplest candidate is another
    Elasticsearch similarity (for example language-model Dirichlet scoring),
